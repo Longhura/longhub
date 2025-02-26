@@ -2041,8 +2041,8 @@ do -- Example UI
         local Slider = Tab:AddSlider("Kill Aura Distance", function(x)
 			_G.DIS = x
 		end, { -- (options are optional)
-			["min"] = 200, -- Default: 0
-			["max"] = 500, -- Default: 1000
+			["min"] = 20, -- Default: 0
+			["max"] = 50, -- Default: 100
 			["readonly"] = false, -- Default: false
 		})
 		
@@ -2119,10 +2119,10 @@ end)
 			_G.SOICE = x
 		end, { -- (options are optional)
 			["min"] = 1, -- Default: 0
-			["max"] = 1000, -- Default: 1000
+			["max"] = 100, -- Default: 100
 			["readonly"] = false, -- Default: false
 		})
-		Slider:Set(300)
+		Slider:Set(30)
 		
 		getgenv().HitBox = false
 		local Switch = Tab:AddSwitch("HitBox Extender", function(bool)
