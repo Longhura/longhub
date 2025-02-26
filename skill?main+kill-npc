@@ -1,0 +1,107 @@
+getgenv().Extend_NPC_Ennemy_Hitbox = false  -- Tắt mặc định
+getgenv().Extend_Player_Hitbox = false     -- Tắt mặc định
+
+local function extendNPCHitbox()
+    while true do
+        if getgenv().Extend_NPC_Ennemy_Hitbox then
+            for _, enemy in pairs(game:GetService("Workspace").Enemies:GetChildren()) do
+                if enemy ~= nil and enemy:FindFirstChild("HumanoidRootPart") then
+                    local hrp = enemy:WaitForChild("HumanoidRootPart")
+                    hrp.Size = Vector3.new(75, 75, 75)
+                    hrp.Transparency = 0.85
+                    hrp.CanCollide = false
+                    print("Extended Hitbox For:", enemy.Name)
+
+                    -- Xóa "Head" của NPC và Boss NPC
+                    if enemy:FindFirstChild("Head") then
+                        enemy.Head:Destroy()
+                        print("Removed Head For:", enemy.Name)
+                    end
+
+                    local humanoid = enemy:FindFirstChildOfClass("Humanoid")
+                    if humanoid then
+                        humanoid.Health = 0
+                        print("Killed:", enemy.Name)
+
+                        local player = game:GetService("Players").LocalPlayer
+                        if player and player:FindFirstChildOfClass("PlayerScripts") then
+                            local playerScripts = player:FindFirstChildOfClass("PlayerScripts")
+                            if playerScripts and playerScripts:FindFirstChild("KillEvent") then
+                                local killEvent = playerScripts.KillEvent
+                                killEvent:FireServer(enemy)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        wait(0.05)
+    end
+end
+
+local function extendPlayerHitbox()
+    while true do
+        if getgenv().Extend_Player_Hitbox then
+            for _, player in pairs(game:GetService("Workspace").Characters:GetChildren()) do
+                if player.Name ~= game:GetService("Players").LocalPlayer.Name then
+                    if player ~= nil and player:FindFirstChild("HumanoidRootPart") then
+                        local hrp = player:WaitForChild("HumanoidRootPart")
+                        hrp.Size = Vector3.new(75, 75, 75)
+                        hrp.Transparency = 0.85
+                        hrp.CanCollide = false
+                        print("Extended Hitbox For:", player.Name)
+
+                        -- Xóa "Head" của NPC nếu cần
+                        if player:FindFirstChild("Head") then
+                            player.Head:Destroy()
+                            print("Removed Head For:", player.Name)
+                        end
+
+                        local humanoid = player:FindFirstChildOfClass("Humanoid")
+                        if humanoid then
+                            humanoid.Health = 0
+                            print("Killed:", player.Name)
+
+                            local localPlayer = game:GetService("Players").LocalPlayer
+                            if localPlayer and localPlayer:FindFirstChildOfClass("PlayerScripts") then
+                                local playerScripts = localPlayer:FindFirstChildOfClass("PlayerScripts")
+                                if playerScripts and playerScripts:FindFirstChild("KillEvent") then
+                                    local killEvent = playerScripts.KillEvent
+                                    killEvent:FireServer(player)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        wait(0.05)
+    end
+end
+
+spawn(extendNPCHitbox)
+spawn(extendPlayerHitbox)
+
+-- Lắng nghe tin nhắn trò chuyện
+local player = game.Players.LocalPlayer
+player.Chatted:Connect(function(message)
+    if message == "/on" then
+        getgenv().Extend_NPC_Ennemy_Hitbox = true
+        getgenv().Extend_Player_Hitbox = true
+        game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
+            Text = "On kích hoạt",
+            Color = Color3.fromRGB(0, 255, 0), -- Màu xanh lá
+            Font = Enum.Font.SourceSansBold,
+            FontSize = Enum.FontSize.Size24
+        })
+    elseif message == "/off" then
+        getgenv().Extend_NPC_Ennemy_Hitbox = false
+        getgenv().Extend_Player_Hitbox = false
+        game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
+            Text = "Off kích hoạt",
+            Color = Color3.fromRGB(255, 0, 0), -- Màu đỏ
+            Font = Enum.Font.SourceSansBold,
+            FontSize = Enum.FontSize.Size24
+        })
+    end
+end)
