@@ -1,0 +1,202 @@
+getgenv().Extend_NPC_Ennemy_Hitbox = false
+getgenv().FlyMode = false
+getgenv().LuckyMode = false
+getgenv().HeadCollisionMode = false -- Mặc định đầu không có va chạm
+
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
+local camera = Workspace.CurrentCamera
+
+-- 📌 Tạo GUI đẹp hơn
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+ScreenGui.ResetOnSpawn = false
+
+local function createButton(name, position, color, text)
+    local btn = Instance.new("TextButton", ScreenGui)
+    btn.Name = name
+    btn.Size = UDim2.new(0, 120, 0, 50)
+    btn.Position = position
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 18
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Active = true
+    btn.Draggable = true
+    btn.AutoButtonColor = false
+    btn.BorderSizePixel = 0
+    -- 🌟 Hiệu ứng hover
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 255, 100)}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = color}):Play()
+    end)
+    return btn
+end
+
+-- 🟢 Nút tiêu diệt NPC
+local KillButton = createButton("KillNPC", UDim2.new(0.3, 0, 0.3, 0), Color3.fromRGB(255, 0, 0), "OFF (NPC)")
+
+-- 🔵 Nút bay
+local FlyButton = createButton("Fly", UDim2.new(0.3, 0, 0.4, 0), Color3.fromRGB(255, 140, 0), "OFF (Fly)")
+
+-- 🎯 Tiêu diệt NPC trong phạm vi 200 studs
+local function KillNPCs()
+    RunService.Heartbeat:Connect(function()
+        if getgenv().Extend_NPC_Ennemy_Hitbox then
+            for _, enemy in pairs(Workspace.Enemies:GetChildren()) do
+                local hrp = enemy:FindFirstChild("HumanoidRootPart")
+                local humanoid = enemy:FindFirstChildOfClass("Humanoid")
+                local head = enemy:FindFirstChild("Head") -- 🧠 Lấy đầu NPC
+
+                if hrp and humanoid and humanoid.Health > 0 then
+                    local distance = (character.HumanoidRootPart.Position - hrp.Position).Magnitude
+                    if distance <= 200 then -- ⚠️ Phạm vi 200
+                        -- 🔴 Mở rộng hitbox
+                        hrp.Size = Vector3.new(75, 75, 75)
+                        hrp.Transparency = 0.85
+                        hrp.CanCollide = false
+                        humanoid.Health = 0 -- 💀 Tiêu diệt NPC
+
+                        -- 🧠 Phóng to đầu NPC
+                        if head then
+                            head.Size = Vector3.new(head.Size.X * 10, head.Size.Y * 10, head.Size.Z * 10)
+                            head.Transparency = 0.9
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ✈️ Hệ thống bay
+local flySpeed = 150
+local flying = false
+local bodyVelocity = Instance.new("BodyVelocity")
+bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+
+local function FlyControl()
+    if flying then return end
+    flying = true
+    bodyVelocity.Parent = humanoidRootPart
+
+    RunService.RenderStepped:Connect(function()
+        if not getgenv().FlyMode or humanoid:GetState() == Enum.HumanoidStateType.Stunned then
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            bodyVelocity.Parent = nil
+            flying = false
+            return
+        end
+
+        -- 🕹️ Điều khiển bay theo góc nhìn
+        if humanoid.MoveDirection.Magnitude > 0 then
+            local camDirection = camera.CFrame.LookVector
+            local moveDir = camDirection * flySpeed
+
+            -- ⏫ Điều khiển lên/xuống bằng góc nhìn
+            local _, pitch = camera.CFrame:ToEulerAnglesYXZ()
+            local upDownSpeed = pitch * flySpeed
+
+            -- 🚀 Giữ Shift để tăng tốc
+            if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
+                moveDir = moveDir * 1.5
+            end
+
+            -- Cập nhật vận tốc bay
+            bodyVelocity.Velocity = moveDir + Vector3.new(0, upDownSpeed, 0)
+        else
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        end
+    end)
+end
+
+-- 🎛️ Bật/tắt tiêu diệt NPC
+KillButton.MouseButton1Click:Connect(function()
+    getgenv().Extend_NPC_Ennemy_Hitbox = not getgenv().Extend_NPC_Ennemy_Hitbox
+
+    if getgenv().Extend_NPC_Ennemy_Hitbox then
+        KillButton.Text = "ON (NPC)"
+        TweenService:Create(KillButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(0, 255, 0)}):Play()
+    else
+        KillButton.Text = "OFF (NPC)"
+        TweenService:Create(KillButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 0, 0)}):Play()
+    end
+end)
+
+-- ✈️ Bật/tắt bay
+FlyButton.MouseButton1Click:Connect(function()
+    getgenv().FlyMode = not getgenv().FlyMode
+
+    if getgenv().FlyMode then
+        FlyButton.Text = "ON (Fly)"
+        TweenService:Create(FlyButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(0, 191, 255)}):Play()
+        FlyControl()
+    else
+        FlyButton.Text = "OFF (Fly)"
+        TweenService:Create(FlyButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 140, 0)}):Play()
+        bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        bodyVelocity.Parent = nil
+        flying = false
+    end
+end)
+
+-- 🎯 Tính năng phóng to đầu NPC
+local function ResizeHead(scale)
+    local head = character:FindFirstChild("Head")
+    if head then
+        head.Size = Vector3.new(head.Size.X * scale, head.Size.Y * scale, head.Size.Z * scale)
+    end
+end
+
+-- 🎰 Tính năng Lucky
+local function LuckyMode()
+    getgenv().LuckyMode = not getgenv().LuckyMode
+
+    if getgenv().LuckyMode then
+        RunService.Heartbeat:Connect(function()
+            for _, enemy in pairs(Workspace.Enemies:GetChildren()) do
+                local head = enemy:FindFirstChild("Head")
+                if head and (character.HumanoidRootPart.Position - head.Position).Magnitude <= 10 then
+                    head.Size = Vector3.new(head.Size.X * 100, head.Size.Y * 100, head.Size.Z * 100)
+                end
+            end
+        end)
+    end
+end
+
+-- 🎮 Xử lý chat commands
+player.Chatted:Connect(function(message)
+    if message == "/head" then
+        ResizeHead(1) -- Trả về kích thước mặc định
+    elseif message == "/100" then
+        ResizeHead(100) -- Phóng to đầu 100 lần
+    elseif message == "/10" then
+        ResizeHead(10) -- Phóng to đầu 10 lần
+    elseif message == "/lucky" then
+        LuckyMode() -- Bật/tắt tính năng Lucky
+    elseif message == "/mode0" then
+        getgenv().HeadCollisionMode = false
+        local head = character:FindFirstChild("Head")
+        if head then
+            head.CanCollide = false -- Tắt va chạm
+        end
+    elseif message == "/mode1" then
+        getgenv().HeadCollisionMode = true
+        local head = character:FindFirstChild("Head")
+        if head then
+            head.CanCollide = true -- Bật va chạm
+        end
+    end
+end)
+
+KillNPCs()
