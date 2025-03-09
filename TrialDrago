@@ -1,0 +1,197 @@
+"404: Not Found"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+
+local Player = Players.LocalPlayer
+local ScreenGui = Instance.new("ScreenGui")
+local Frame = Instance.new("Frame")
+local UIStroke = Instance.new("UIStroke")
+
+-- Tạo nút dịch chuyển
+local TeleportTrialButton = Instance.new("TextButton")
+local TeleportBrazierButton = Instance.new("TextButton")
+local TeleportDoorButton = Instance.new("TextButton")
+local CloseButton = Instance.new("TextButton") -- Nút đóng
+
+ScreenGui.Parent = Player:WaitForChild("PlayerGui")
+ScreenGui.Name = "TeleportGUI"
+ScreenGui.ResetOnSpawn = false
+
+Frame.Parent = ScreenGui
+Frame.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
+Frame.Position = UDim2.new(0.5, -50, 0.5, -25) -- Khởi đầu nhỏ
+Frame.Size = UDim2.new(0, 100, 0, 50) -- Kích thước ban đầu nhỏ
+Frame.Active = true
+Frame.Draggable = true
+
+-- Viền cầu vồng
+UIStroke.Parent = Frame
+UIStroke.Thickness = 3
+UIStroke.Color = Color3.fromRGB(255, 0, 0)
+UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+-- Danh sách màu cầu vồng
+local colors = {
+    Color3.fromRGB(255, 0, 0),   -- Đỏ
+    Color3.fromRGB(255, 127, 0), -- Cam
+    Color3.fromRGB(255, 255, 0), -- Vàng
+    Color3.fromRGB(0, 255, 0),   -- Xanh lá
+    Color3.fromRGB(0, 255, 255), -- Xanh dương nhạt
+    Color3.fromRGB(0, 0, 255),   -- Xanh dương
+    Color3.fromRGB(139, 0, 255)  -- Tím
+}
+
+-- Hiệu ứng đổi màu viền
+local function cycleRainbow()
+    local index = 1
+    while ScreenGui.Parent do
+        local nextColor = colors[index]
+        local tween = TweenService:Create(UIStroke, TweenInfo.new(0.5, Enum.EasingStyle.Linear), { Color = nextColor })
+        tween:Play()
+        tween.Completed:Wait()
+        index = index % #colors + 1
+    end
+end
+
+-- Hàm tạo nút
+local function createButton(button, parent, text, position, color)
+    button.Parent = parent
+    button.Text = text
+    button.Position = position
+    button.Size = UDim2.new(0.8, 0, 0.2, 0) -- Nút lớn hơn
+    button.Font = Enum.Font.SourceSansBold
+    button.TextSize = 18
+    button.BackgroundColor3 = color
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.BorderSizePixel = 0
+    button.AutoButtonColor = true
+    button.Visible = false -- Ẩn ban đầu
+end
+
+-- Tạo nút bên trong khung
+createButton(TeleportTrialButton, Frame, "Lối Vào", UDim2.new(0.1, 0, 0.2, 0), Color3.fromRGB(0, 255, 0))
+createButton(TeleportBrazierButton, Frame, "Trụ Cao", UDim2.new(0.1, 0, 0.45, 0), Color3.fromRGB(255, 165, 0))
+createButton(TeleportDoorButton, Frame, "Lối Ra", UDim2.new(0.1, 0, 0.7, 0), Color3.fromRGB(255, 0, 0))
+
+-- Nút đóng (Dấu X)
+CloseButton.Parent = Frame
+CloseButton.Size = UDim2.new(0, 25, 0, 25)
+CloseButton.Position = UDim2.new(1, -30, 0, 5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.Font = Enum.Font.SourceSansBold
+CloseButton.TextSize = 18
+CloseButton.BorderSizePixel = 0
+CloseButton.ZIndex = 2
+CloseButton.Visible = false -- Ẩn ban đầu
+
+-- Hiệu ứng hover cho nút đóng
+CloseButton.MouseEnter:Connect(function()
+    CloseButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+end)
+CloseButton.MouseLeave:Connect(function()
+    CloseButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+end)
+
+-- Hiệu ứng mở rộng khung
+local function expandFrame()
+    local tween = TweenService:Create(Frame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 200, 0, 200),
+        Position = UDim2.new(0.5, -100, 0.5, -75)
+    })
+    tween:Play()
+    tween.Completed:Wait() -- Đợi hoàn tất
+    -- Hiển thị nút sau khi khung mở rộng
+    TeleportTrialButton.Visible = true
+    TeleportBrazierButton.Visible = true
+    TeleportDoorButton.Visible = true
+    CloseButton.Visible = true
+end
+
+-- Hàm tìm đối tượng gần nhất
+local function findNearestObject(objectName)
+    local character = Player.Character
+    if not character or not character.PrimaryPart then
+        return nil
+    end
+
+    local nearestObject = nil
+    local shortestDistance = math.huge
+    local characterPosition = character.PrimaryPart.Position
+
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Name == objectName then
+            local distance = (obj.Position - characterPosition).Magnitude
+            if distance < shortestDistance then
+                nearestObject = obj
+                shortestDistance = distance
+            end
+        end
+    end
+
+    return nearestObject
+end
+
+-- Hàm dịch chuyển
+local function teleportToObject(objectName)
+    local target = findNearestObject(objectName)
+    if target then
+        local character = Player.Character
+        if character and character.PrimaryPart then
+            character:SetPrimaryPartCFrame(CFrame.new(target.Position))
+        end
+    end
+end
+
+-- Gán chức năng dịch chuyển cho nút
+TeleportTrialButton.MouseButton1Click:Connect(function()
+    teleportToObject("TrialTeleport")
+end)
+
+TeleportBrazierButton.MouseButton1Click:Connect(function()
+    teleportToObject("Brazier2")
+end)
+
+TeleportDoorButton.MouseButton1Click:Connect(function()
+    teleportToObject("DoorTouch")
+end)
+
+-- Nút đóng GUI
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+-- Chạy hiệu ứng mở rộng khung và viền cầu vồng
+task.spawn(expandFrame)
+task.spawn(cycleRainbow)
