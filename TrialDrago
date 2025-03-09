@@ -21,14 +21,15 @@ ScreenGui.ResetOnSpawn = false
 
 Frame.Parent = ScreenGui
 Frame.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
-Frame.Position = UDim2.new(0.5, -90, 0.5, -75)
-Frame.Size = UDim2.new(0, 180, 0, 180)
+Frame.Position = UDim2.new(0.5, -50, 0.5, -25) -- Khởi đầu nhỏ
+Frame.Size = UDim2.new(0, 100, 0, 50) -- Kích thước ban đầu nhỏ
 Frame.Active = true
 Frame.Draggable = true
 
 -- Viền cầu vồng
 UIStroke.Parent = Frame
 UIStroke.Thickness = 3
+UIStroke.Color = Color3.fromRGB(255, 0, 0)
 UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
 -- Danh sách màu cầu vồng
@@ -65,6 +66,7 @@ local function createButton(button, parent, text, position, color)
     button.BackgroundColor3 = color
     button.TextColor3 = Color3.fromRGB(255, 255, 255)
     button.BorderSizePixel = 0
+    button.Visible = false -- Ẩn ban đầu
 end
 
 -- Tạo nút trong khung
@@ -84,6 +86,7 @@ CloseButton.Font = Enum.Font.SourceSansBold
 CloseButton.TextSize = 18
 CloseButton.BorderSizePixel = 0
 CloseButton.ZIndex = 2
+CloseButton.Visible = false -- Ẩn ban đầu
 
 -- Nút Reset (🔓)
 ResetButton.Parent = Frame
@@ -96,6 +99,7 @@ ResetButton.Font = Enum.Font.SourceSansBold
 ResetButton.TextSize = 18
 ResetButton.BorderSizePixel = 0
 ResetButton.ZIndex = 2
+ResetButton.Visible = false -- Ẩn ban đầu
 
 -- Hiệu ứng hover cho nút đóng
 CloseButton.MouseEnter:Connect(function()
@@ -208,6 +212,23 @@ local function teleportToNextColor()
     LampButton.Text = "Đèn" .. lampIndex
 end
 
+-- Hiệu ứng mở rộng khung
+local function expandFrame()
+    local tween = TweenService:Create(Frame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 200, 0, 200),
+        Position = UDim2.new(0.5, -100, 0.5, -75)
+    })
+    tween:Play()
+    tween.Completed:Wait() -- Đợi hoàn tất
+    -- Hiển thị nút sau khi khung mở rộng
+    TeleportTrialButton.Visible = true
+    TeleportBrazierButton.Visible = true
+    TeleportDoorButton.Visible = true
+    LampButton.Visible = true
+    CloseButton.Visible = true
+    ResetButton.Visible = true
+end
+
 -- Gán chức năng dịch chuyển cho nút
 TeleportTrialButton.MouseButton1Click:Connect(function()
     teleportToObject("TrialTeleport")
@@ -236,5 +257,6 @@ ResetButton.MouseButton1Click:Connect(function()
     LampButton.Text = "Đèn1"
 end)
 
--- Chạy hiệu ứng viền cầu vồng
+-- Chạy hiệu ứng mở rộng khung và viền cầu vồng
+task.spawn(expandFrame)
 task.spawn(cycleRainbow)
