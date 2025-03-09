@@ -7,11 +7,13 @@ local ScreenGui = Instance.new("ScreenGui")
 local Frame = Instance.new("Frame")
 local UIStroke = Instance.new("UIStroke")
 
--- Tạo nút dịch chuyển
+-- Tạo các nút
 local TeleportTrialButton = Instance.new("TextButton")
 local TeleportBrazierButton = Instance.new("TextButton")
 local TeleportDoorButton = Instance.new("TextButton")
-local CloseButton = Instance.new("TextButton") -- Nút đóng
+local LampButton = Instance.new("TextButton")
+local CloseButton = Instance.new("TextButton")
+local ResetButton = Instance.new("TextButton") -- Nút "🔓"
 
 ScreenGui.Parent = Player:WaitForChild("PlayerGui")
 ScreenGui.Name = "TeleportGUI"
@@ -19,15 +21,14 @@ ScreenGui.ResetOnSpawn = false
 
 Frame.Parent = ScreenGui
 Frame.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
-Frame.Position = UDim2.new(0.5, -50, 0.5, -25) -- Khởi đầu nhỏ
-Frame.Size = UDim2.new(0, 100, 0, 50) -- Kích thước ban đầu nhỏ
+Frame.Position = UDim2.new(0.5, -90, 0.5, -75)
+Frame.Size = UDim2.new(0, 180, 0, 180)
 Frame.Active = true
 Frame.Draggable = true
 
 -- Viền cầu vồng
 UIStroke.Parent = Frame
 UIStroke.Thickness = 3
-UIStroke.Color = Color3.fromRGB(255, 0, 0)
 UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
 -- Danh sách màu cầu vồng
@@ -58,22 +59,21 @@ local function createButton(button, parent, text, position, color)
     button.Parent = parent
     button.Text = text
     button.Position = position
-    button.Size = UDim2.new(0.8, 0, 0.2, 0) -- Nút lớn hơn
+    button.Size = UDim2.new(0.8, 0, 0.18, 0)
     button.Font = Enum.Font.SourceSansBold
     button.TextSize = 18
     button.BackgroundColor3 = color
     button.TextColor3 = Color3.fromRGB(255, 255, 255)
     button.BorderSizePixel = 0
-    button.AutoButtonColor = true
-    button.Visible = false -- Ẩn ban đầu
 end
 
--- Tạo nút bên trong khung
-createButton(TeleportTrialButton, Frame, "Lối Vào", UDim2.new(0.1, 0, 0.2, 0), Color3.fromRGB(0, 255, 0))
-createButton(TeleportBrazierButton, Frame, "Trụ Cao", UDim2.new(0.1, 0, 0.45, 0), Color3.fromRGB(255, 165, 0))
+-- Tạo nút trong khung
+createButton(TeleportTrialButton, Frame, "Lối Vào", UDim2.new(0.1, 0, 0.1, 0), Color3.fromRGB(0, 255, 0))
+createButton(TeleportBrazierButton, Frame, "Trụ Cao", UDim2.new(0.1, 0, 0.3, 0), Color3.fromRGB(255, 165, 0))
+createButton(LampButton, Frame, "Đèn1", UDim2.new(0.1, 0, 0.5, 0), Color3.fromRGB(0, 170, 255))
 createButton(TeleportDoorButton, Frame, "Lối Ra", UDim2.new(0.1, 0, 0.7, 0), Color3.fromRGB(255, 0, 0))
 
--- Nút đóng (Dấu X)
+-- Nút đóng (X)
 CloseButton.Parent = Frame
 CloseButton.Size = UDim2.new(0, 25, 0, 25)
 CloseButton.Position = UDim2.new(1, -30, 0, 5)
@@ -84,7 +84,18 @@ CloseButton.Font = Enum.Font.SourceSansBold
 CloseButton.TextSize = 18
 CloseButton.BorderSizePixel = 0
 CloseButton.ZIndex = 2
-CloseButton.Visible = false -- Ẩn ban đầu
+
+-- Nút Reset (🔓)
+ResetButton.Parent = Frame
+ResetButton.Size = UDim2.new(0, 25, 0, 25)
+ResetButton.Position = UDim2.new(0, 5, 0, 5)
+ResetButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+ResetButton.Text = "🔓"
+ResetButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ResetButton.Font = Enum.Font.SourceSansBold
+ResetButton.TextSize = 18
+ResetButton.BorderSizePixel = 0
+ResetButton.ZIndex = 2
 
 -- Hiệu ứng hover cho nút đóng
 CloseButton.MouseEnter:Connect(function()
@@ -94,20 +105,13 @@ CloseButton.MouseLeave:Connect(function()
     CloseButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
 end)
 
--- Hiệu ứng mở rộng khung
-local function expandFrame()
-    local tween = TweenService:Create(Frame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0, 200, 0, 200),
-        Position = UDim2.new(0.5, -100, 0.5, -75)
-    })
-    tween:Play()
-    tween.Completed:Wait() -- Đợi hoàn tất
-    -- Hiển thị nút sau khi khung mở rộng
-    TeleportTrialButton.Visible = true
-    TeleportBrazierButton.Visible = true
-    TeleportDoorButton.Visible = true
-    CloseButton.Visible = true
-end
+-- Hiệu ứng hover cho nút Reset
+ResetButton.MouseEnter:Connect(function()
+    ResetButton.BackgroundColor3 = Color3.fromRGB(50, 180, 255)
+end)
+ResetButton.MouseLeave:Connect(function()
+    ResetButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+end)
 
 -- Hàm tìm đối tượng gần nhất
 local function findNearestObject(objectName)
@@ -144,6 +148,66 @@ local function teleportToObject(objectName)
     end
 end
 
+-- Hàm tìm tất cả "Color4" và sắp xếp theo khoảng cách
+local function getSortedColorList()
+    local character = Player.Character
+    if not character or not character.PrimaryPart then
+        return {}
+    end
+
+    local colorList = {}
+
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Name == "Color4" then
+            local distance = (obj.Position - character.PrimaryPart.Position).Magnitude
+            table.insert(colorList, { obj = obj, distance = distance })
+        end
+    end
+
+    table.sort(colorList, function(a, b) return a.distance < b.distance end)
+
+    return colorList
+end
+
+-- Dữ liệu vòng lặp "Đèn"
+local lampIndex = 1
+local visitedColors = {}
+
+-- Hàm dịch chuyển đến "Color4" chưa ghé qua trong vòng lặp hiện tại
+local function teleportToNextColor()
+    local colorList = getSortedColorList()
+    if #colorList == 0 then return end
+
+    -- Lọc ra những Color4 chưa đến
+    local unvisitedColors = {}
+    for _, colorData in ipairs(colorList) do
+        if not visitedColors[colorData.obj] then
+            table.insert(unvisitedColors, colorData.obj)
+        end
+    end
+
+    -- Nếu đã đi qua tất cả, reset vòng lặp
+    if #unvisitedColors == 0 then
+        visitedColors = {}
+        lampIndex = 1
+        LampButton.Text = "Đèn1"
+        return
+    end
+
+    -- Dịch chuyển đến Color4 gần nhất trong danh sách chưa đến
+    local targetColor = unvisitedColors[1]
+    visitedColors[targetColor] = true
+
+    local character = Player.Character
+    if character and character.PrimaryPart then
+        character:SetPrimaryPartCFrame(targetColor.CFrame + Vector3.new(0, 3, 0))
+    end
+
+    -- Cập nhật nút Đèn
+    lampIndex = lampIndex % 3 + 1
+    LampButton.Text = "Đèn" .. lampIndex
+end
+
 -- Gán chức năng dịch chuyển cho nút
 TeleportTrialButton.MouseButton1Click:Connect(function()
     teleportToObject("TrialTeleport")
@@ -157,11 +221,20 @@ TeleportDoorButton.MouseButton1Click:Connect(function()
     teleportToObject("DoorTouch")
 end)
 
+-- Nút Đèn hoạt động theo vòng lặp "Đèn1 → Đèn2 → Đèn3 → Reset"
+LampButton.MouseButton1Click:Connect(teleportToNextColor)
+
 -- Nút đóng GUI
 CloseButton.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
--- Chạy hiệu ứng mở rộng khung và viền cầu vồng
-task.spawn(expandFrame)
+-- Nút Reset: Xoá toàn bộ dữ liệu lưu trữ điểm trước đó
+ResetButton.MouseButton1Click:Connect(function()
+    visitedColors = {}
+    lampIndex = 1
+    LampButton.Text = "Đèn1"
+end)
+
+-- Chạy hiệu ứng viền cầu vồng
 task.spawn(cycleRainbow)
