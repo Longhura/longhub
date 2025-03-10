@@ -12,6 +12,7 @@ local TeleportTrialButton = Instance.new("TextButton")
 local TeleportBrazierButton = Instance.new("TextButton")
 local TeleportDoorButton = Instance.new("TextButton")
 local LampButton = Instance.new("TextButton")
+local NPCButton = Instance.new("TextButton") -- Nút NPC mới
 local CloseButton = Instance.new("TextButton")
 local ResetButton = Instance.new("TextButton") -- Nút "🔓"
 
@@ -60,7 +61,7 @@ local function createButton(button, parent, text, position, color)
     button.Parent = parent
     button.Text = text
     button.Position = position
-    button.Size = UDim2.new(0.8, 0, 0.18, 0)
+    button.Size = UDim2.new(0.8, 0, 0.15, 0) -- Điều chỉnh kích thước nút
     button.Font = Enum.Font.SourceSansBold
     button.TextSize = 18
     button.BackgroundColor3 = color
@@ -70,10 +71,11 @@ local function createButton(button, parent, text, position, color)
 end
 
 -- Tạo nút trong khung
-createButton(TeleportTrialButton, Frame, "Lối Vào", UDim2.new(0.1, 0, 0.1, 0), Color3.fromRGB(0, 255, 0))
-createButton(TeleportBrazierButton, Frame, "Trụ Cao", UDim2.new(0.1, 0, 0.3, 0), Color3.fromRGB(255, 165, 0))
-createButton(LampButton, Frame, "Đèn1", UDim2.new(0.1, 0, 0.5, 0), Color3.fromRGB(0, 170, 255))
-createButton(TeleportDoorButton, Frame, "Lối Ra", UDim2.new(0.1, 0, 0.7, 0), Color3.fromRGB(255, 0, 0))
+createButton(TeleportTrialButton, Frame, "Lối Vào", UDim2.new(0.1, 0, 0.05, 0), Color3.fromRGB(0, 255, 0))
+createButton(TeleportBrazierButton, Frame, "Trụ Cao", UDim2.new(0.1, 0, 0.22, 0), Color3.fromRGB(255, 165, 0))
+createButton(LampButton, Frame, "Đèn1", UDim2.new(0.1, 0, 0.39, 0), Color3.fromRGB(0, 170, 255))
+createButton(TeleportDoorButton, Frame, "Lối Ra", UDim2.new(0.1, 0, 0.56, 0), Color3.fromRGB(255, 0, 0))
+createButton(NPCButton, Frame, "NPC", UDim2.new(0.1, 0, 0.73, 0), Color3.fromRGB(128, 0, 128)) -- Nút NPC mới
 
 -- Nút đóng (X)
 CloseButton.Parent = Frame
@@ -215,8 +217,8 @@ end
 -- Hiệu ứng mở rộng khung
 local function expandFrame()
     local tween = TweenService:Create(Frame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0, 200, 0, 200),
-        Position = UDim2.new(0.5, -100, 0.5, -75)
+        Size = UDim2.new(0, 200, 0, 200), -- Điều chỉnh kích thước khung để phù hợp với nút mới
+        Position = UDim2.new(0.5, -100, 0.5, -125)
     })
     tween:Play()
     tween.Completed:Wait() -- Đợi hoàn tất
@@ -225,6 +227,7 @@ local function expandFrame()
     TeleportBrazierButton.Visible = true
     TeleportDoorButton.Visible = true
     LampButton.Visible = true
+    NPCButton.Visible = true -- Hiển thị nút NPC
     CloseButton.Visible = true
     ResetButton.Visible = true
 end
@@ -240,6 +243,11 @@ end)
 
 TeleportDoorButton.MouseButton1Click:Connect(function()
     teleportToObject("DoorTouch")
+end)
+
+-- Nút NPC: Dịch chuyển đến "Activate"
+NPCButton.MouseButton1Click:Connect(function()
+    teleportToObject("Activate")
 end)
 
 -- Nút Đèn hoạt động theo vòng lặp "Đèn1 → Đèn2 → Đèn3 → Reset"
