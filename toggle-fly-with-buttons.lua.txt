@@ -1,0 +1,460 @@
+-- 360° Flying Script for Roblox with Draggable Buttons
+-- Place this in a LocalScript inside StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Flying settings
+local flyEnabled = false
+local flySpeed = 50
+local maxSpeed = 100
+local minSpeed = 10
+local speedIncrement = 5
+
+-- Movement variables
+local moveDirection = Vector3.new(0, 0, 0)
+local isMoving = false
+
+-- Button states
+local buttonStates = {
+    forward = false,
+    backward = false,
+    left = false,
+    right = false,
+    up = false,
+    down = false
+}
+
+-- Function to create a draggable button
+local function createDraggableButton(name, position, size, color, text, callback)
+    local button = Instance.new("TextButton")
+    button.Name = name
+    button.Size = size
+    button.Position = position
+    button.BackgroundColor3 = color
+    button.BackgroundTransparency = 0.5
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 14
+    button.BorderSizePixel = 2
+    button.BorderColor3 = Color3.fromRGB(255, 255, 255)
+    button.AutoButtonColor = true
+    
+    -- Make the button draggable
+    local dragging = false
+    local dragInput
+    local dragStart
+    local startPos
+    
+    button.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = button.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+        
+        -- Call the callback function when button is pressed
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            callback(true)
+        end
+    end)
+    
+    button.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            callback(false)
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    RunService.RenderStepped:Connect(function()
+        if dragging and button.Parent ~= nil then
+            local delta = dragInput.Position - dragStart
+            button.Position = UDim2.new(
+                startPos.X.Scale, 
+                startPos.X.Offset + delta.X, 
+                startPos.Y.Scale, 
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    
+    return button
+end
+
+-- Function to toggle flying
+local function toggleFly()
+    flyEnabled = not flyEnabled
+    
+    if flyEnabled then
+        -- Enable flying
+        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+        rootPart.Anchored = true
+        
+        -- Create control GUI if it doesn't exist
+        if not player.PlayerGui:FindFirstChild("FlyControlGui") then
+            createControlGui()
+        end
+        
+        -- Show control GUI
+        player.PlayerGui.FlyControlGui.Enabled = true
+        
+        -- Notification
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Flying Enabled",
+            Text = "Use on-screen controls to fly",
+            Duration = 3
+        })
+    else
+        -- Disable flying
+        humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        rootPart.Anchored = false
+        rootPart.Velocity = Vector3.new(0, 0, 0)
+        
+        -- Hide control GUI
+        if player.PlayerGui:FindFirstChild("FlyControlGui") then
+            player.PlayerGui.FlyControlGui.Enabled = false
+        end
+        
+        -- Reset movement
+        moveDirection = Vector3.new(0, 0, 0)
+        isMoving = false
+        
+        -- Reset button states
+        for key, _ in pairs(buttonStates) do
+            buttonStates[key] = false
+        end
+        
+        -- Notification
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Flying Disabled",
+            Text = "Normal movement restored",
+            Duration = 3
+        })
+    end
+end
+
+-- Update speed display
+local function updateSpeedDisplay()
+    if player.PlayerGui:FindFirstChild("FlyControlGui") then
+        local speedLabel = player.PlayerGui.FlyControlGui.SpeedFrame.SpeedLabel
+        speedLabel.Text = "Flying Speed: " .. flySpeed
+    end
+end
+
+-- Create the control GUI
+function createControlGui()
+    local controlGui = Instance.new("ScreenGui")
+    controlGui.Name = "FlyControlGui"
+    controlGui.ResetOnSpawn = false
+    
+    -- Toggle button
+    local toggleButton = createDraggableButton(
+        "ToggleButton",
+        UDim2.new(0.5, -50, 0.1, 0),
+        UDim2.new(0, 100, 0, 40),
+        Color3.fromRGB(255, 0, 0),
+        "TOGGLE FLY",
+        function()
+            -- This is a one-time action on click, not a continuous state
+            toggleFly()
+        end
+    )
+    toggleButton.Parent = controlGui
+    
+    -- Speed display frame
+    local speedFrame = Instance.new("Frame")
+    speedFrame.Name = "SpeedFrame"
+    speedFrame.Size = UDim2.new(0, 150, 0, 40)
+    speedFrame.Position = UDim2.new(0.5, -75, 0.2, 0)
+    speedFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    speedFrame.BackgroundTransparency = 0.5
+    speedFrame.BorderSizePixel = 0
+    speedFrame.Parent = controlGui
+    
+    local speedLabel = Instance.new("TextLabel")
+    speedLabel.Name = "SpeedLabel"
+    speedLabel.Size = UDim2.new(1, 0, 1, 0)
+    speedLabel.BackgroundTransparency = 1
+    speedLabel.Text = "Flying Speed: " .. flySpeed
+    speedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    speedLabel.Font = Enum.Font.GothamBold
+    speedLabel.TextSize = 18
+    speedLabel.Parent = speedFrame
+    
+    -- Speed control buttons
+    local speedUpButton = createDraggableButton(
+        "SpeedUpButton",
+        UDim2.new(0.6, 0, 0.2, 0),
+        UDim2.new(0, 40, 0, 40),
+        Color3.fromRGB(0, 255, 0),
+        "+",
+        function()
+            flySpeed = math.min(flySpeed + speedIncrement, maxSpeed)
+            updateSpeedDisplay()
+        end
+    )
+    speedUpButton.Parent = controlGui
+    
+    local speedDownButton = createDraggableButton(
+        "SpeedDownButton",
+        UDim2.new(0.4, -40, 0.2, 0),
+        UDim2.new(0, 40, 0, 40),
+        Color3.fromRGB(255, 165, 0),
+        "-",
+        function()
+            flySpeed = math.max(flySpeed - speedIncrement, minSpeed)
+            updateSpeedDisplay()
+        end
+    )
+    speedDownButton.Parent = controlGui
+    
+    -- Movement buttons
+    -- Forward
+    local forwardButton = createDraggableButton(
+        "ForwardButton",
+        UDim2.new(0.5, -25, 0.7, -110),
+        UDim2.new(0, 50, 0, 50),
+        Color3.fromRGB(0, 0, 255),
+        "W",
+        function(pressed)
+            buttonStates.forward = pressed
+            updateMoveDirection()
+        end
+    )
+    forwardButton.Parent = controlGui
+    
+    -- Backward
+    local backwardButton = createDraggableButton(
+        "BackwardButton",
+        UDim2.new(0.5, -25, 0.7, 0),
+        UDim2.new(0, 50, 0, 50),
+        Color3.fromRGB(0, 0, 255),
+        "S",
+        function(pressed)
+            buttonStates.backward = pressed
+            updateMoveDirection()
+        end
+    )
+    backwardButton.Parent = controlGui
+    
+    -- Left
+    local leftButton = createDraggableButton(
+        "LeftButton",
+        UDim2.new(0.5, -85, 0.7, -55),
+        UDim2.new(0, 50, 0, 50),
+        Color3.fromRGB(0, 0, 255),
+        "A",
+        function(pressed)
+            buttonStates.left = pressed
+            updateMoveDirection()
+        end
+    )
+    leftButton.Parent = controlGui
+    
+    -- Right
+    local rightButton = createDraggableButton(
+        "RightButton",
+        UDim2.new(0.5, 35, 0.7, -55),
+        UDim2.new(0, 50, 0, 50),
+        Color3.fromRGB(0, 0, 255),
+        "D",
+        function(pressed)
+            buttonStates.right = pressed
+            updateMoveDirection()
+        end
+    )
+    rightButton.Parent = controlGui
+    
+    -- Up
+    local upButton = createDraggableButton(
+        "UpButton",
+        UDim2.new(0.7, 0, 0.7, -55),
+        UDim2.new(0, 50, 0, 50),
+        Color3.fromRGB(0, 128, 255),
+        "UP",
+        function(pressed)
+            buttonStates.up = pressed
+            updateMoveDirection()
+        end
+    )
+    upButton.Parent = controlGui
+    
+    -- Down
+    local downButton = createDraggableButton(
+        "DownButton",
+        UDim2.new(0.3, -50, 0.7, -55),
+        UDim2.new(0, 50, 0, 50),
+        Color3.fromRGB(0, 128, 255),
+        "DOWN",
+        function(pressed)
+            buttonStates.down = pressed
+            updateMoveDirection()
+        end
+    )
+    downButton.Parent = controlGui
+    
+    controlGui.Parent = player.PlayerGui
+    controlGui.Enabled = false
+end
+
+-- Update move direction based on button states
+function updateMoveDirection()
+    moveDirection = Vector3.new(0, 0, 0)
+    
+    if buttonStates.forward then
+        moveDirection = moveDirection + Vector3.new(0, 0, -1)
+    end
+    if buttonStates.backward then
+        moveDirection = moveDirection + Vector3.new(0, 0, 1)
+    end
+    if buttonStates.left then
+        moveDirection = moveDirection + Vector3.new(-1, 0, 0)
+    end
+    if buttonStates.right then
+        moveDirection = moveDirection + Vector3.new(1, 0, 0)
+    end
+    if buttonStates.up then
+        moveDirection = moveDirection + Vector3.new(0, 1, 0)
+    end
+    if buttonStates.down then
+        moveDirection = moveDirection + Vector3.new(0, -1, 0)
+    end
+    
+    isMoving = moveDirection.Magnitude > 0
+end
+
+-- Handle keyboard input for backward compatibility
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    -- Toggle flying with F key
+    if input.KeyCode == Enum.KeyCode.F then
+        toggleFly()
+    end
+    
+    if flyEnabled then
+        -- Movement keys
+        if input.KeyCode == Enum.KeyCode.W then
+            buttonStates.forward = true
+            updateMoveDirection()
+        elseif input.KeyCode == Enum.KeyCode.S then
+            buttonStates.backward = true
+            updateMoveDirection()
+        elseif input.KeyCode == Enum.KeyCode.A then
+            buttonStates.left = true
+            updateMoveDirection()
+        elseif input.KeyCode == Enum.KeyCode.D then
+            buttonStates.right = true
+            updateMoveDirection()
+        elseif input.KeyCode == Enum.KeyCode.Space then
+            buttonStates.up = true
+            updateMoveDirection()
+        elseif input.KeyCode == Enum.KeyCode.LeftShift then
+            buttonStates.down = true
+            updateMoveDirection()
+        end
+    end
+end)
+
+-- Handle keyboard input ended
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if flyEnabled then
+        -- Movement keys
+        if input.KeyCode == Enum.KeyCode.W then
+            buttonStates.forward = false
+            updateMoveDirection()
+        elseif input.KeyCode == Enum.KeyCode.S then
+            buttonStates.backward = false
+            updateMoveDirection()
+        elseif input.KeyCode == Enum.KeyCode.A then
+            buttonStates.left = false
+            updateMoveDirection()
+        elseif input.KeyCode == Enum.KeyCode.D then
+            buttonStates.right = false
+            updateMoveDirection()
+        elseif input.KeyCode == Enum.KeyCode.Space then
+            buttonStates.up = false
+            updateMoveDirection()
+        elseif input.KeyCode == Enum.KeyCode.LeftShift then
+            buttonStates.down = false
+            updateMoveDirection()
+        end
+    end
+end)
+
+-- Main flying loop
+RunService.RenderStepped:Connect(function()
+    if not flyEnabled then return end
+    
+    -- Get camera direction
+    local camera = workspace.CurrentCamera
+    local cameraDirection = camera.CFrame.LookVector
+    local cameraRight = camera.CFrame.RightVector
+    
+    -- Calculate movement direction relative to camera
+    local direction = (cameraDirection * -moveDirection.Z) + 
+                     (cameraRight * moveDirection.X) + 
+                     (Vector3.new(0, 1, 0) * moveDirection.Y)
+    
+    if direction.Magnitude > 0 then
+        direction = direction.Unit
+    end
+    
+    -- Move the character
+    if isMoving then
+        rootPart.CFrame = rootPart.CFrame + direction * (flySpeed / 10)
+    end
+end)
+
+-- Handle character respawn
+player.CharacterAdded:Connect(function(newCharacter)
+    character = newCharacter
+    humanoid = character:WaitForChild("Humanoid")
+    rootPart = character:WaitForChild("HumanoidRootPart")
+    
+    -- Reset flying state
+    flyEnabled = false
+    moveDirection = Vector3.new(0, 0, 0)
+    isMoving = false
+    
+    -- Reset button states
+    for key, _ in pairs(buttonStates) do
+        buttonStates[key] = false
+    end
+    
+    -- Hide control GUI
+    if player.PlayerGui:FindFirstChild("FlyControlGui") then
+        player.PlayerGui.FlyControlGui.Enabled = false
+    end
+end)
+
+-- Create the control GUI on script load
+createControlGui()
+
+-- Initial notification
+game.StarterGui:SetCore("SendNotification", {
+    Title = "Flying Script Loaded",
+    Text = "Press F or use the on-screen button to toggle flying mode",
+    Duration = 5
+})
+
