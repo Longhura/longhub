@@ -1,0 +1,1020 @@
+-- Enhanced Flying Script for Roblox with Mobile-Optimized Controls
+-- Place this in a LocalScript inside StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Settings
+local flyEnabled = false
+local flySpeed = 50
+local maxSpeed = 100
+local minSpeed = 10
+local speedIncrement = 5
+local jumpHeight = 100 -- Enhanced jump height
+local speedMultiplier = 2.5 -- Enhanced speed multiplier
+local antiAfkEnabled = false
+local lastActivityTime = tick()
+local originalJumpPower = humanoid.JumpPower
+local originalWalkSpeed = humanoid.WalkSpeed
+
+-- Movement variables
+local moveDirection = Vector3.new(0, 0, 0)
+local isMoving = false
+local joystickActive = false
+local joystickPosition = Vector2.new(0, 0)
+local joystickCenter = Vector2.new(0, 0)
+local joystickRadius = 50
+local joystickMaxRadius = 100
+
+-- Feature states
+local featureStates = {
+    antiAfk = false,
+    highJump = false,
+    speedBoost = false,
+    invisibility = false,
+    invincibility = false
+}
+
+-- Rainbow colors for visual effects
+local rainbowColors = {
+    Color3.fromRGB(255, 0, 0),   -- Red
+    Color3.fromRGB(255, 127, 0), -- Orange
+    Color3.fromRGB(255, 255, 0), -- Yellow
+    Color3.fromRGB(0, 255, 0),   -- Green
+    Color3.fromRGB(0, 255, 255), -- Cyan
+    Color3.fromRGB(0, 0, 255),   -- Blue
+    Color3.fromRGB(139, 0, 255)  -- Purple
+}
+
+-- Function to apply rainbow effect to a UIStroke
+local function applyRainbowEffect(uiStroke)
+    task.spawn(function()
+        local index = 1
+        while uiStroke and uiStroke.Parent do
+            local nextColor = rainbowColors[index]
+            local tween = TweenService:Create(uiStroke, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {Color = nextColor})
+            tween:Play()
+            task.wait(0.5)
+            
+            index = index % #rainbowColors + 1
+        end
+    end)
+end
+
+-- Function to create a checkbox
+local function createCheckbox(parent, position, text, initialState, callback)
+    local checkboxFrame = Instance.new("Frame")
+    checkboxFrame.Name = text .. "CheckboxFrame"
+    checkboxFrame.Size = UDim2.new(0, 200, 0, 30)
+    checkboxFrame.Position = position
+    checkboxFrame.BackgroundTransparency = 1
+    checkboxFrame.Parent = parent
+    
+    local checkbox = Instance.new("TextButton")
+    checkbox.Name = text .. "Checkbox"
+    checkbox.Size = UDim2.new(0, 30, 0, 30)
+    checkbox.Position = UDim2.new(0, 0, 0, 0)
+    checkbox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    checkbox.BackgroundTransparency = 0.3
+    checkbox.Text = initialState and "✓" or ""
+    checkbox.TextColor3 = Color3.fromRGB(0, 255, 0)
+    checkbox.Font = Enum.Font.GothamBold
+    checkbox.TextSize = 18
+    checkbox.Parent = checkboxFrame
+    
+    -- Add rounded corners
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0.2, 0)
+    uiCorner.Parent = checkbox
+    
+    -- Add stroke
+    local uiStroke = Instance.new("UIStroke")
+    uiStroke.Thickness = 2
+    uiStroke.Color = Color3.fromRGB(255, 255, 255)
+    uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    uiStroke.Parent = checkbox
+    
+    local label = Instance.new("TextLabel")
+    label.Name = text .. "Label"
+    label.Size = UDim2.new(0, 160, 0, 30)
+    label.Position = UDim2.new(0, 40, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.GothamSemibold
+    label.TextSize = 16
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = checkboxFrame
+    
+    local state = initialState
+    
+    checkbox.MouseButton1Click:Connect(function()
+        state = not state
+        checkbox.Text = state and "✓" or ""
+        callback(state)
+    end)
+    
+    return checkboxFrame, state
+end
+
+-- Function to create a button (non-draggable)
+local function createButton(name, position, size, color, text, callback)
+    local button = Instance.new("TextButton")
+    button.Name = name
+    button.Size = size
+    button.Position = position
+    button.BackgroundColor3 = color
+    button.BackgroundTransparency = 0.3
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 18
+    button.BorderSizePixel = 0
+    button.AutoButtonColor = true
+    
+    -- Add rounded corners
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0.2, 0)
+    uiCorner.Parent = button
+    
+    -- Add stroke (border)
+    local uiStroke = Instance.new("UIStroke")
+    uiStroke.Thickness = 2
+    uiStroke.Color = Color3.fromRGB(255, 255, 255)
+    uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    uiStroke.Parent = button
+    
+    -- Add click handler
+    button.MouseButton1Click:Connect(function()
+        callback(true)
+    end)
+    
+    -- Add hover effect for PC users
+    button.MouseEnter:Connect(function()
+        button.BackgroundTransparency = 0.1
+    end)
+    
+    button.MouseLeave:Connect(function()
+        button.BackgroundTransparency = 0.3
+    end)
+    
+    return button, uiStroke
+end
+
+-- Function to create a joystick control
+local function createJoystick(parent)
+    local joystickFrame = Instance.new("Frame")
+    joystickFrame.Name = "JoystickFrame"
+    joystickFrame.Size = UDim2.new(0, 200, 0, 200)
+    joystickFrame.Position = UDim2.new(0.1, 0, 0.6, 0)
+    joystickFrame.BackgroundTransparency = 1
+    joystickFrame.Parent = parent
+    
+    local joystickBackground = Instance.new("Frame")
+    joystickBackground.Name = "JoystickBackground"
+    joystickBackground.Size = UDim2.new(0, 150, 0, 150)
+    joystickBackground.Position = UDim2.new(0.5, -75, 0.5, -75)
+    joystickBackground.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    joystickBackground.BackgroundTransparency = 0.7
+    joystickBackground.BorderSizePixel = 0
+    joystickBackground.Parent = joystickFrame
+    
+    -- Add rounded corners
+    local bgCorner = Instance.new("UICorner")
+    bgCorner.CornerRadius = UDim.new(1, 0)
+    bgCorner.Parent = joystickBackground
+    
+    -- Add stroke
+    local bgStroke = Instance.new("UIStroke")
+    bgStroke.Thickness = 2
+    bgStroke.Color = Color3.fromRGB(255, 255, 255)
+    bgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    bgStroke.Parent = joystickBackground
+    
+    -- Apply rainbow effect
+    applyRainbowEffect(bgStroke)
+    
+    local joystickKnob = Instance.new("Frame")
+    joystickKnob.Name = "JoystickKnob"
+    joystickKnob.Size = UDim2.new(0, 50, 0, 50)
+    joystickKnob.Position = UDim2.new(0.5, -25, 0.5, -25)
+    joystickKnob.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+    joystickKnob.BackgroundTransparency = 0.3
+    joystickKnob.BorderSizePixel = 0
+    joystickKnob.Parent = joystickBackground
+    
+    -- Add rounded corners
+    local knobCorner = Instance.new("UICorner")
+    knobCorner.CornerRadius = UDim.new(1, 0)
+    knobCorner.Parent = joystickKnob
+    
+    -- Add stroke
+    local knobStroke = Instance.new("UIStroke")
+    knobStroke.Thickness = 2
+    knobStroke.Color = Color3.fromRGB(255, 255, 255)
+    knobStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    knobStroke.Parent = joystickKnob
+    
+    -- Joystick functionality
+    joystickBackground.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            joystickActive = true
+            
+            -- Get the center of the joystick background in screen space
+            local bgAbsPos = joystickBackground.AbsolutePosition
+            local bgAbsSize = joystickBackground.AbsoluteSize
+            joystickCenter = Vector2.new(
+                bgAbsPos.X + bgAbsSize.X/2,
+                bgAbsPos.Y + bgAbsSize.Y/2
+            )
+            
+            -- Update joystick position
+            updateJoystickPosition(input.Position)
+        end
+    end)
+    
+    joystickBackground.InputChanged:Connect(function(input)
+        if joystickActive and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            updateJoystickPosition(input.Position)
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if joystickActive then
+                joystickActive = false
+                -- Reset joystick knob position
+                joystickKnob.Position = UDim2.new(0.5, -25, 0.5, -25)
+                -- Reset movement
+                moveDirection = Vector3.new(0, 0, 0)
+                isMoving = false
+            end
+        end
+    end)
+    
+    return joystickFrame, joystickKnob
+end
+
+-- Function to update joystick position and calculate movement direction
+function updateJoystickPosition(inputPosition)
+    -- Calculate the vector from center to input position
+    local delta = Vector2.new(inputPosition.X - joystickCenter.X, inputPosition.Y - joystickCenter.Y)
+    local distance = delta.Magnitude
+    
+    -- Limit the distance to the max radius
+    if distance > joystickMaxRadius then
+        delta = delta.Unit * joystickMaxRadius
+        distance = joystickMaxRadius
+    end
+    
+    -- Update knob position
+    local joystickKnob = player.PlayerGui.FlyControlGui.JoystickFrame.JoystickBackground.JoystickKnob
+    joystickKnob.Position = UDim2.new(0.5, delta.X - 25, 0.5, delta.Y - 25)
+    
+    -- Calculate normalized direction for movement
+    local normalizedDelta = delta / joystickMaxRadius
+    
+    -- Get camera direction for movement relative to view
+    local camera = workspace.CurrentCamera
+    local lookVector = camera.CFrame.LookVector
+    local rightVector = camera.CFrame.RightVector
+    
+    -- Calculate movement direction based on joystick input and camera orientation
+    moveDirection = Vector3.new(
+        normalizedDelta.X,  -- Right/Left based on joystick X
+        0,                  -- Up/Down will be handled separately
+        normalizedDelta.Y   -- Forward/Backward based on joystick Y
+    )
+    
+    -- Set moving flag if joystick is active
+    isMoving = distance > joystickRadius * 0.2
+end
+
+-- Function to toggle flying
+local function toggleFly()
+    flyEnabled = not flyEnabled
+    
+    if flyEnabled then
+        -- Enable flying
+        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+        rootPart.Anchored = true
+        
+        -- Create control GUI if it doesn't exist
+        if not player.PlayerGui:FindFirstChild("FlyControlGui") then
+            createControlGui()
+        end
+        
+        -- Show control GUI
+        player.PlayerGui.FlyControlGui.Enabled = true
+        
+        -- Notification
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Flying Enabled",
+            Text = "Use joystick to move, camera to steer",
+            Duration = 3
+        })
+    else
+        -- Disable flying
+        humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        rootPart.Anchored = false
+        rootPart.Velocity = Vector3.new(0, 0, 0)
+        
+        -- Hide control GUI
+        if player.PlayerGui:FindFirstChild("FlyControlGui") then
+            player.PlayerGui.FlyControlGui.Enabled = false
+        end
+        
+        -- Reset movement
+        moveDirection = Vector3.new(0, 0, 0)
+        isMoving = false
+        joystickActive = false
+        
+        -- Notification
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Flying Disabled",
+            Text = "Normal movement restored",
+            Duration = 3
+        })
+    end
+end
+
+-- Update speed display
+local function updateSpeedDisplay()
+    if player.PlayerGui:FindFirstChild("FlyControlGui") then
+        local speedLabel = player.PlayerGui.FlyControlGui.SpeedFrame.SpeedLabel
+        speedLabel.Text = "Flying Speed: " .. flySpeed
+    end
+end
+
+-- Function to make a frame draggable
+function makeFrameDraggable(frame)
+    local dragging = false
+    local dragInput
+    local dragStart
+    local startPos
+    
+    local function updateInput(input)
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(
+            startPos.X.Scale, 
+            startPos.X.Offset + delta.X, 
+            startPos.Y.Scale, 
+            startPos.Y.Offset + delta.Y
+        )
+    end
+    
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            updateInput(input)
+        end
+    end)
+end
+
+-- Enhanced high jump function (works in all games)
+local function setHighJump(enabled)
+    if enabled then
+        -- Store original jump power if not already stored
+        if originalJumpPower == 0 then
+            originalJumpPower = humanoid.JumpPower
+        end
+        
+        -- Apply high jump using multiple methods for compatibility
+        humanoid.JumpPower = jumpHeight
+        humanoid.JumpHeight = jumpHeight / 2.5
+        
+        -- Hook the jump function for games that might override it
+        task.spawn(function()
+            while featureStates.highJump do
+                if humanoid.JumpPower < jumpHeight then
+                    humanoid.JumpPower = jumpHeight
+                end
+                if humanoid.JumpHeight < jumpHeight / 2.5 then
+                    humanoid.JumpHeight = jumpHeight / 2.5
+                end
+                task.wait(0.1)
+            end
+        end)
+    else
+        -- Restore original jump power
+        humanoid.JumpPower = originalJumpPower
+        humanoid.JumpHeight = 7.2 -- Default jump height
+    end
+end
+
+-- Enhanced speed boost function (works in all games)
+local function setSpeedBoost(enabled)
+    if enabled then
+        -- Store original walk speed if not already stored
+        if originalWalkSpeed == 0 then
+            originalWalkSpeed = humanoid.WalkSpeed
+        end
+        
+        -- Apply speed boost using multiple methods for compatibility
+        humanoid.WalkSpeed = originalWalkSpeed * speedMultiplier
+        
+        -- Hook the walk speed for games that might override it
+        task.spawn(function()
+            while featureStates.speedBoost do
+                if humanoid.WalkSpeed < originalWalkSpeed * speedMultiplier then
+                    humanoid.WalkSpeed = originalWalkSpeed * speedMultiplier
+                end
+                task.wait(0.1)
+            end
+        end)
+    else
+        -- Restore original walk speed
+        humanoid.WalkSpeed = originalWalkSpeed
+    end
+end
+
+-- Invisibility function
+local function setInvisibility(enabled)
+    if not character then return end
+    
+    if enabled then
+        -- Make character transparent
+        for _, part in pairs(character:GetDescendants()) do
+            if part:IsA("BasePart") or part:IsA("Decal") or part:IsA("Texture") then
+                if part.Name ~= "HumanoidRootPart" then -- Keep HumanoidRootPart visible for yourself
+                    part.Transparency = 0.8
+                end
+            end
+            if part:IsA("Accessory") then
+                for _, p in pairs(part:GetDescendants()) do
+                    if p:IsA("BasePart") or p:IsA("Decal") or p:IsA("Texture") then
+                        p.Transparency = 0.8
+                    end
+                end
+            end
+        end
+        
+        -- Disable character name tag if it exists
+        if character:FindFirstChild("Head") and character.Head:FindFirstChild("NameTag") then
+            character.Head.NameTag.Enabled = false
+        end
+    else
+        -- Restore character visibility
+        for _, part in pairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                if part.Name == "HumanoidRootPart" then
+                    part.Transparency = 1 -- HumanoidRootPart should be invisible
+                else
+                    part.Transparency = 0
+                end
+            elseif part:IsA("Decal") or part:IsA("Texture") then
+                part.Transparency = 0
+            end
+            if part:IsA("Accessory") then
+                for _, p in pairs(part:GetDescendants()) do
+                    if p:IsA("BasePart") or p:IsA("Decal") or p:IsA("Texture") then
+                        p.Transparency = 0
+                    end
+                end
+            end
+        end
+        
+        -- Re-enable character name tag if it exists
+        if character:FindFirstChild("Head") and character.Head:FindFirstChild("NameTag") then
+            character.Head.NameTag.Enabled = true
+        end
+    end
+end
+
+-- Invincibility function (limited implementation)
+local function setInvincibility(enabled)
+    if enabled then
+        -- Create a connection to reset health when damaged
+        if not character:FindFirstChild("HealthMonitor") then
+            local healthMonitor = Instance.new("BoolValue")
+            healthMonitor.Name = "HealthMonitor"
+            healthMonitor.Value = true
+            healthMonitor.Parent = character
+            
+            -- Monitor health changes
+            task.spawn(function()
+                local lastHealth = humanoid.Health
+                
+                while healthMonitor.Value and healthMonitor.Parent do
+                    if humanoid.Health < lastHealth then
+                        -- Health decreased, restore it
+                        humanoid.Health = humanoid.MaxHealth
+                    end
+                    
+                    lastHealth = humanoid.Health
+                    task.wait(0.1)
+                end
+            end)
+        end
+    else
+        -- Remove health monitor
+        if character:FindFirstChild("HealthMonitor") then
+            character.HealthMonitor:Destroy()
+        end
+    end
+end
+
+-- Anti-AFK function
+local function setupAntiAFK()
+    -- Update last activity time
+    local function updateActivity()
+        lastActivityTime = tick()
+    end
+    
+    -- Connect to input events to track activity
+    UserInputService.InputBegan:Connect(updateActivity)
+    UserInputService.InputChanged:Connect(updateActivity)
+    
+    -- Anti-AFK loop
+    task.spawn(function()
+        while true do
+            task.wait(10) -- Check every 10 seconds
+            
+            if featureStates.antiAfk and tick() - lastActivityTime > 120 then -- 2 minutes of inactivity
+                -- Simulate activity to prevent AFK kick
+                local randomKey = Enum.KeyCode.Space
+                game:GetService("VirtualInputManager"):SendKeyEvent(true, randomKey, false, game)
+                task.wait(0.1)
+                game:GetService("VirtualInputManager"):SendKeyEvent(false, randomKey, false, game)
+                
+                -- Log activity
+                print("Anti-AFK: Activity simulated at " .. os.date("%H:%M:%S"))
+            end
+        end
+    end)
+end
+
+-- Create the control GUI with enhanced visuals
+function createControlGui()
+    local controlGui = Instance.new("ScreenGui")
+    controlGui.Name = "FlyControlGui"
+    controlGui.ResetOnSpawn = false
+    
+    -- Main control panel
+    local mainPanel = Instance.new("Frame")
+    mainPanel.Name = "MainPanel"
+    mainPanel.Size = UDim2.new(0, 300, 0, 200)
+    mainPanel.Position = UDim2.new(0.5, -150, 0.1, 0)
+    mainPanel.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
+    mainPanel.BackgroundTransparency = 0.3
+    mainPanel.BorderSizePixel = 0
+    mainPanel.Parent = controlGui
+    
+    -- Add rounded corners to main panel
+    local panelCorner = Instance.new("UICorner")
+    panelCorner.CornerRadius = UDim.new(0.05, 0)
+    panelCorner.Parent = mainPanel
+    
+    -- Add stroke to main panel
+    local panelStroke = Instance.new("UIStroke")
+    panelStroke.Thickness = 3
+    panelStroke.Color = Color3.fromRGB(255, 0, 0)
+    panelStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    panelStroke.Parent = mainPanel
+    
+    -- Apply rainbow effect to panel border
+    applyRainbowEffect(panelStroke)
+    
+    -- Title label
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "TitleLabel"
+    titleLabel.Size = UDim2.new(1, 0, 0, 30)
+    titleLabel.Position = UDim2.new(0, 0, 0, 5)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "FLIGHT CONTROLS"
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 20
+    titleLabel.Parent = mainPanel
+    
+    -- Toggle button
+    local toggleButton, toggleStroke = createButton(
+        "ToggleButton",
+        UDim2.new(0.5, -50, 0, 40),
+        UDim2.new(0, 100, 0, 40),
+        Color3.fromRGB(255, 0, 0),
+        "TOGGLE FLY",
+        function()
+            -- This is a one-time action on click, not a continuous state
+            toggleFly()
+        end
+    )
+    toggleButton.Parent = mainPanel
+    applyRainbowEffect(toggleStroke)
+    
+    -- Close button
+    local closeButton, closeStroke = createButton(
+        "CloseButton",
+        UDim2.new(1, -35, 0, 5),
+        UDim2.new(0, 30, 0, 30),
+        Color3.fromRGB(200, 0, 0),
+        "X",
+        function()
+            -- Hide the GUI
+            controlGui.Enabled = false
+            -- Disable flying
+            if flyEnabled then
+                toggleFly()
+            end
+        end
+    )
+    closeButton.Parent = mainPanel
+    
+    -- Speed display frame
+    local speedFrame = Instance.new("Frame")
+    speedFrame.Name = "SpeedFrame"
+    speedFrame.Size = UDim2.new(0, 150, 0, 40)
+    speedFrame.Position = UDim2.new(0.5, -75, 0, 90)
+    speedFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    speedFrame.BackgroundTransparency = 0.5
+    speedFrame.BorderSizePixel = 0
+    speedFrame.Parent = mainPanel
+    
+    -- Add rounded corners to speed frame
+    local speedCorner = Instance.new("UICorner")
+    speedCorner.CornerRadius = UDim.new(0.2, 0)
+    speedCorner.Parent = speedFrame
+    
+    local speedLabel = Instance.new("TextLabel")
+    speedLabel.Name = "SpeedLabel"
+    speedLabel.Size = UDim2.new(1, 0, 1, 0)
+    speedLabel.BackgroundTransparency = 1
+    speedLabel.Text = "Flying Speed: " .. flySpeed
+    speedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    speedLabel.Font = Enum.Font.GothamBold
+    speedLabel.TextSize = 18
+    speedLabel.Parent = speedFrame
+    
+    -- Speed control buttons
+    local speedUpButton, speedUpStroke = createButton(
+        "SpeedUpButton",
+        UDim2.new(0.7, 0, 0, 90),
+        UDim2.new(0, 40, 0, 40),
+        Color3.fromRGB(0, 255, 0),
+        "+",
+        function()
+            flySpeed = math.min(flySpeed + speedIncrement, maxSpeed)
+            updateSpeedDisplay()
+        end
+    )
+    speedUpButton.Parent = mainPanel
+    
+    local speedDownButton, speedDownStroke = createButton(
+        "SpeedDownButton",
+        UDim2.new(0.3, -40, 0, 90),
+        UDim2.new(0, 40, 0, 40),
+        Color3.fromRGB(255, 165, 0),
+        "-",
+        function()
+            flySpeed = math.max(flySpeed - speedIncrement, minSpeed)
+            updateSpeedDisplay()
+        end
+    )
+    speedDownButton.Parent = mainPanel
+    
+    -- Features panel
+    local featuresPanel = Instance.new("Frame")
+    featuresPanel.Name = "FeaturesPanel"
+    featuresPanel.Size = UDim2.new(0, 250, 0, 350)
+    featuresPanel.Position = UDim2.new(0.8, -125, 0.3, 0)
+    featuresPanel.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
+    featuresPanel.BackgroundTransparency = 0.3
+    featuresPanel.BorderSizePixel = 0
+    featuresPanel.Visible = false
+    featuresPanel.Parent = controlGui
+    
+    -- Add rounded corners to features panel
+    local featuresCorner = Instance.new("UICorner")
+    featuresCorner.CornerRadius = UDim.new(0.05, 0)
+    featuresCorner.Parent = featuresPanel
+    
+    -- Add stroke to features panel
+    local featuresStroke = Instance.new("UIStroke")
+    featuresStroke.Thickness = 3
+    featuresStroke.Color = Color3.fromRGB(0, 255, 255)
+    featuresStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    featuresStroke.Parent = featuresPanel
+    
+    -- Apply rainbow effect to features panel border
+    applyRainbowEffect(featuresStroke)
+    
+    -- Features title
+    local featuresTitle = Instance.new("TextLabel")
+    featuresTitle.Name = "FeaturesTitle"
+    featuresTitle.Size = UDim2.new(1, 0, 0, 30)
+    featuresTitle.Position = UDim2.new(0, 0, 0, 5)
+    featuresTitle.BackgroundTransparency = 1
+    featuresTitle.Text = "FEATURES"
+    featuresTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    featuresTitle.Font = Enum.Font.GothamBold
+    featuresTitle.TextSize = 20
+    featuresTitle.Parent = featuresPanel
+    
+    -- Close features button
+    local closeFeaturesButton, closeFeaturesStroke = createButton(
+        "CloseFeaturesButton",
+        UDim2.new(1, -35, 0, 5),
+        UDim2.new(0, 30, 0, 30),
+        Color3.fromRGB(200, 0, 0),
+        "X",
+        function()
+            featuresPanel.Visible = false
+        end
+    )
+    closeFeaturesButton.Parent = featuresPanel
+    
+    -- Feature checkboxes
+    local antiAfkCheckbox, antiAfkState = createCheckbox(
+        featuresPanel,
+        UDim2.new(0, 25, 0, 50),
+        "Anti-AFK",
+        featureStates.antiAfk,
+        function(state)
+            featureStates.antiAfk = state
+            print("Anti-AFK:", state)
+        end
+    )
+    
+    local highJumpCheckbox, highJumpState = createCheckbox(
+        featuresPanel,
+        UDim2.new(0, 25, 0, 90),
+        "High Jump",
+        featureStates.highJump,
+        function(state)
+            featureStates.highJump = state
+            setHighJump(state)
+            print("High Jump:", state)
+        end
+    )
+    
+    local speedBoostCheckbox, speedBoostState = createCheckbox(
+        featuresPanel,
+        UDim2.new(0, 25, 0, 130),
+        "Speed Boost",
+        featureStates.speedBoost,
+        function(state)
+            featureStates.speedBoost = state
+            setSpeedBoost(state)
+            print("Speed Boost:", state)
+        end
+    )
+    
+    -- God Mode section
+    local godModeLabel = Instance.new("TextLabel")
+    godModeLabel.Name = "GodModeLabel"
+    godModeLabel.Size = UDim2.new(1, -50, 0, 30)
+    godModeLabel.Position = UDim2.new(0, 25, 0, 170)
+    godModeLabel.BackgroundTransparency = 1
+    godModeLabel.Text = "God Mode Options:"
+    godModeLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    godModeLabel.Font = Enum.Font.GothamBold
+    godModeLabel.TextSize = 16
+    godModeLabel.TextXAlignment = Enum.TextXAlignment.Left
+    godModeLabel.Parent = featuresPanel
+    
+    local invisibilityCheckbox, invisibilityState = createCheckbox(
+        featuresPanel,
+        UDim2.new(0, 25, 0, 210),
+        "Invisibility",
+        featureStates.invisibility,
+        function(state)
+            featureStates.invisibility = state
+            setInvisibility(state)
+            print("Invisibility:", state)
+        end
+    )
+    
+    local invincibilityCheckbox, invincibilityState = createCheckbox(
+        featuresPanel,
+        UDim2.new(0, 25, 0, 250),
+        "Invincibility",
+        featureStates.invincibility,
+        function(state)
+            featureStates.invincibility = state
+            setInvincibility(state)
+            print("Invincibility:", state)
+        end
+    )
+    
+    -- Features button on main panel
+    local featuresButton, featuresButtonStroke = createButton(
+        "FeaturesButton",
+        UDim2.new(0.5, -50, 0, 140),
+        UDim2.new(0, 100, 0, 40),
+        Color3.fromRGB(0, 200, 255),
+        "FEATURES",
+        function()
+            featuresPanel.Visible = not featuresPanel.Visible
+        end
+    )
+    featuresButton.Parent = mainPanel
+    
+    -- Create joystick control
+    local joystickFrame, joystickKnob = createJoystick(controlGui)
+    
+    -- Up/Down controls
+    local upButton, upStroke = createButton(
+        "UpButton",
+        UDim2.new(0.85, -35, 0.6, -35),
+        UDim2.new(0, 70, 0, 70),
+        Color3.fromRGB(0, 128, 255),
+        "UP",
+        function(pressed)
+            if pressed then
+                moveDirection = moveDirection + Vector3.new(0, 1, 0)
+            else
+                moveDirection = moveDirection - Vector3.new(0, 1, 0)
+            end
+        end
+    )
+    upButton.Parent = controlGui
+    
+    local downButton, downStroke = createButton(
+        "DownButton",
+        UDim2.new(0.85, -35, 0.7, 45),
+        UDim2.new(0, 70, 0, 70),
+        Color3.fromRGB(0, 128, 255),
+        "DOWN",
+        function(pressed)
+            if pressed then
+                moveDirection = moveDirection + Vector3.new(0, -1, 0)
+            else
+                moveDirection = moveDirection - Vector3.new(0, -1, 0)
+            end
+        end
+    )
+    downButton.Parent = controlGui
+    
+    -- Make the panels draggable
+    makeFrameDraggable(mainPanel)
+    makeFrameDraggable(featuresPanel)
+    makeFrameDraggable(joystickFrame)
+    
+    controlGui.Parent = player.PlayerGui
+    controlGui.Enabled = false
+end
+
+-- Show a button to open the controls if they're closed
+local function createOpenButton()
+    local openButton = Instance.new("TextButton")
+    openButton.Name = "OpenFlyControlsButton"
+    openButton.Size = UDim2.new(0, 50, 0, 50)
+    openButton.Position = UDim2.new(0.9, -25, 0.1, 0)
+    openButton.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
+    openButton.BackgroundTransparency = 0.3
+    openButton.Text = "✈️"
+    openButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    openButton.Font = Enum.Font.GothamBold
+    openButton.TextSize = 24
+    openButton.BorderSizePixel = 0
+    openButton.AutoButtonColor = true
+    
+    -- Add rounded corners
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0.5, 0)
+    uiCorner.Parent = openButton
+    
+    -- Add stroke
+    local uiStroke = Instance.new("UIStroke")
+    uiStroke.Thickness = 2
+    uiStroke.Color = Color3.fromRGB(255, 255, 255)
+    uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    uiStroke.Parent = openButton
+    
+    -- Apply rainbow effect
+    applyRainbowEffect(uiStroke)
+    
+    openButton.MouseButton1Click:Connect(function()
+        -- Show the fly controls
+        if player.PlayerGui:FindFirstChild("FlyControlGui") then
+            player.PlayerGui.FlyControlGui.Enabled = true
+        else
+            createControlGui()
+            player.PlayerGui.FlyControlGui.Enabled = true
+        end
+    end)
+    
+    local openGui = Instance.new("ScreenGui")
+    openGui.Name = "OpenFlyControlsGui"
+    openGui.ResetOnSpawn = false
+    openGui.Parent = player.PlayerGui
+    
+    -- Make the open button draggable
+    makeFrameDraggable(openButton)
+    
+    openButton.Parent = openGui
+end
+
+-- Main flying loop
+RunService.RenderStepped:Connect(function()
+    if not flyEnabled then return end
+    
+    -- Get camera direction
+    local camera = workspace.CurrentCamera
+    local cameraDirection = camera.CFrame.LookVector
+    local cameraRight = camera.CFrame.RightVector
+    
+    -- Calculate movement direction relative to camera
+    local viewBasedDirection = Vector3.new(0, 0, 0)
+    
+    if joystickActive then
+        -- Use joystick input for horizontal movement
+        viewBasedDirection = (cameraDirection * -moveDirection.Z) + 
+                           (cameraRight * moveDirection.X) + 
+                           (Vector3.new(0, 1, 0) * moveDirection.Y)
+    else
+        -- Use direct moveDirection when not using joystick
+        viewBasedDirection = moveDirection
+    end
+    
+    if viewBasedDirection.Magnitude > 0 then
+        viewBasedDirection = viewBasedDirection.Unit
+    end
+    
+    -- Move the character
+    if isMoving or moveDirection.Y ~= 0 then
+        rootPart.CFrame = rootPart.CFrame + viewBasedDirection * (flySpeed / 10)
+    end
+end)
+
+-- Handle character respawn
+player.CharacterAdded:Connect(function(newCharacter)
+    character = newCharacter
+    humanoid = character:WaitForChild("Humanoid")
+    rootPart = character:WaitForChild("HumanoidRootPart")
+    
+    -- Store original values
+    originalJumpPower = humanoid.JumpPower
+    originalWalkSpeed = humanoid.WalkSpeed
+    
+    -- Reset flying state
+    flyEnabled = false
+    moveDirection = Vector3.new(0, 0, 0)
+    isMoving = false
+    joystickActive = false
+    
+    -- Hide control GUI
+    if player.PlayerGui:FindFirstChild("FlyControlGui") then
+        player.PlayerGui.FlyControlGui.Enabled = false
+    end
+    
+    -- Reapply feature states if they were enabled
+    if featureStates.highJump then
+        setHighJump(true)
+    end
+    
+    if featureStates.speedBoost then
+        setSpeedBoost(true)
+    end
+    
+    if featureStates.invisibility then
+        setInvisibility(true)
+    end
+    
+    if featureStates.invincibility then
+        setInvincibility(true)
+    end
+end)
+
+-- Setup Anti-AFK
+setupAntiAFK()
+
+-- Create the control GUI on script load
+createControlGui()
+
+-- Create the open button
+createOpenButton()
+
+-- Initial notification
+game.StarterGui:SetCore("SendNotification", {
+    Title = "Enhanced Flying Script Loaded",
+    Text = "Use the joystick to fly, camera to steer",
+    Duration = 5
+})
+
