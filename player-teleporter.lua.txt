@@ -1241,4 +1241,3 @@ game.StarterGui:SetCore("SendNotification", {
     Text = "Click the 🚀 button to open the teleporter",
     Duration = 5
 })
-
