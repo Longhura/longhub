@@ -1,4 +1,4 @@
--- Player Teleporter and Flyer Script for Roblox
+-- Player Teleporter and Flyer Script for Roblox (Fixed Version)
 -- Place this in a LocalScript inside StarterPlayerScripts
 
 local Players = game:GetService("Players")
@@ -8,8 +8,8 @@ local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local rootPart = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:FindFirstChildOfClass("Humanoid")
+local rootPart = character:FindFirstChild("HumanoidRootPart")
 
 -- Settings
 local selectedPlayer = nil
@@ -22,6 +22,8 @@ local positionOffset = Vector3.new(0, 0, 0)
 local autoTeleporting = false
 local autoFlying = false
 local flyEnabled = false
+local teleporterGui = nil
+local openGui = nil
 
 -- Rainbow colors for visual effects
 local rainbowColors = {
@@ -87,7 +89,7 @@ local function makeFrameDraggable(frame)
     end)
     
     UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
+        if input == dragInput and dragging and frame and frame.Parent then
             updateInput(input)
         end
     end)
@@ -201,8 +203,11 @@ local function teleportToCFrame(targetPosition)
     if not ownRootPart then return false end
     
     -- Try to teleport using CFrame
-    ownRootPart.CFrame = CFrame.new(targetPosition)
-    return true
+    local success, errorMsg = pcall(function()
+        ownRootPart.CFrame = CFrame.new(targetPosition)
+    end)
+    
+    return success
 end
 
 -- Secondary teleport function (using TweenService)
@@ -218,12 +223,12 @@ local function teleportToTween(targetPosition)
     duration = math.min(duration, 10)
     
     -- Create and play tween
-    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(ownRootPart, tweenInfo, {CFrame = CFrame.new(targetPosition)})
-    tween:Play()
-    
-    -- Wait for tween to complete
-    local success, _ = pcall(function()
+    local success, errorMsg = pcall(function()
+        local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+        local tween = TweenService:Create(ownRootPart, tweenInfo, {CFrame = CFrame.new(targetPosition)})
+        tween:Play()
+        
+        -- Wait for tween to complete
         tween.Completed:Wait()
     end)
     
@@ -240,19 +245,32 @@ local function teleportToVelocity(targetPosition)
     local distance = (targetPosition - ownRootPart.Position).Magnitude
     
     -- Apply velocity in the direction of the target
-    ownRootPart.Velocity = direction * teleportSpeed
+    local success, errorMsg = pcall(function()
+        ownRootPart.Velocity = direction * teleportSpeed
+        
+        -- Wait for approximate arrival time
+        local arrivalTime = distance / teleportSpeed
+        task.wait(arrivalTime)
+        
+        -- Stop movement
+        ownRootPart.Velocity = Vector3.new(0, 0, 0)
+        
+        -- Final position adjustment
+        ownRootPart.CFrame = CFrame.new(targetPosition)
+    end)
     
-    -- Wait for approximate arrival time
-    local arrivalTime = distance / teleportSpeed
-    task.wait(arrivalTime)
+    return success
+end
+
+-- Fourth teleport method (using character:MoveTo)
+local function teleportToMoveTo(targetPosition)
+    if not player or not player.Character then return false end
     
-    -- Stop movement
-    ownRootPart.Velocity = Vector3.new(0, 0, 0)
+    local success, errorMsg = pcall(function()
+        player.Character:MoveTo(targetPosition)
+    end)
     
-    -- Final position adjustment
-    ownRootPart.CFrame = CFrame.new(targetPosition)
-    
-    return true
+    return success
 end
 
 -- Main teleport function that tries all methods
@@ -288,6 +306,10 @@ local function teleportToPlayer(targetPlayer)
     
     -- Try tertiary method if secondary fails
     success = teleportToVelocity(targetPosition)
+    if success then return true end
+    
+    -- Try fourth method if tertiary fails
+    success = teleportToMoveTo(targetPosition)
     
     if not success then
         game.StarterGui:SetCore("SendNotification", {
@@ -329,9 +351,15 @@ local function flyToPlayer(targetPlayer)
         -- Enable flying
         local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
         if humanoid then
-            humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+            pcall(function()
+                humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+            end)
         end
-        ownRootPart.Anchored = true
+        
+        pcall(function()
+            ownRootPart.Anchored = true
+        end)
+        
         flyEnabled = true
     end
     
@@ -342,7 +370,9 @@ local function flyToPlayer(targetPlayer)
     
     -- Move towards target
     if distance > 5 then -- Only move if we're not already close
-        ownRootPart.CFrame = ownRootPart.CFrame + direction * (flySpeed / 10)
+        pcall(function()
+            ownRootPart.CFrame = ownRootPart.CFrame + direction * (flySpeed / 10)
+        end)
         return true
     else
         -- We've reached the target
@@ -365,7 +395,9 @@ local function flyToPlayerBackup(targetPlayer)
         -- Try a different flying method
         local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
         if humanoid then
-            humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
+            pcall(function()
+                humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
+            end)
         end
         flyEnabled = true
     end
@@ -377,12 +409,36 @@ local function flyToPlayerBackup(targetPlayer)
     
     -- Move towards target using velocity
     if distance > 5 then
-        ownRootPart.Velocity = direction * flySpeed
+        pcall(function()
+            ownRootPart.Velocity = direction * flySpeed
+        end)
         return true
     else
-        ownRootPart.Velocity = Vector3.new(0, 0, 0)
+        pcall(function()
+            ownRootPart.Velocity = Vector3.new(0, 0, 0)
+        end)
         return false
     end
+end
+
+-- Third fly method (using MoveTo)
+local function flyToPlayerMoveTo(targetPlayer)
+    if not targetPlayer or not targetPlayer.Parent then return false end
+    
+    local targetRootPart = getPlayerRootPart(targetPlayer)
+    if not targetRootPart then return false end
+    
+    if not player or not player.Character then return false end
+    
+    -- Calculate target position
+    local targetPosition = targetRootPart.Position + positionOffset
+    
+    -- Move to target
+    pcall(function()
+        player.Character:MoveTo(targetPosition)
+    end)
+    
+    return true
 end
 
 -- Function to disable flying
@@ -391,12 +447,16 @@ local function disableFly()
     if not ownRootPart then return end
     
     -- Disable flying
-    ownRootPart.Anchored = false
-    ownRootPart.Velocity = Vector3.new(0, 0, 0)
+    pcall(function()
+        ownRootPart.Anchored = false
+        ownRootPart.Velocity = Vector3.new(0, 0, 0)
+    end)
     
     local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
     if humanoid then
-        humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        pcall(function()
+            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end)
     end
     
     flyEnabled = false
@@ -444,7 +504,7 @@ local function updatePlayerList(scrollFrame)
                     selectedPlayer = otherPlayer
                     
                     -- Update selected player label
-                    if player.PlayerGui:FindFirstChild("TeleporterGui") then
+                    if player.PlayerGui:FindFirstChild("TeleporterGui") and player.PlayerGui.TeleporterGui:FindFirstChild("MainPanel") then
                         local selectedPlayerLabel = player.PlayerGui.TeleporterGui.MainPanel.SelectedPlayerLabel
                         selectedPlayerLabel.Text = "Selected: " .. otherPlayer.Name
                     end
@@ -566,6 +626,11 @@ end
 
 -- Create the main teleporter GUI
 local function createTeleporterGui()
+    -- Remove existing GUI if it exists
+    if player.PlayerGui:FindFirstChild("TeleporterGui") then
+        player.PlayerGui.TeleporterGui:Destroy()
+    end
+    
     local teleporterGui = Instance.new("ScreenGui")
     teleporterGui.Name = "TeleporterGui"
     teleporterGui.ResetOnSpawn = false
@@ -711,6 +776,8 @@ local function createTeleporterGui()
     -- Fly speed control buttons
     local flySpeedUpButton, flySpeedUpStroke = createButton(
         "FlySpeedUpButton",
+        UDim2.new(0.7, 0, 0, 160  flySpeedUpStroke = createButton(
+        "FlySpeedUpButton",
         UDim2.new(0.7, 0, 0, 160),
         UDim2.new(0, 40, 0, 20),
         Color3.fromRGB(0, 255, 0),
@@ -743,8 +810,6 @@ local function createTeleporterGui()
     offsetLabel.BackgroundTransparency = 1
     offsetLabel.Text = "Position Offset (X,Y,Z):"
     offsetLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    offsetLabel.Font = Enum.Font.GothamSemibold
-    offsetLabel.TextSize = 14255,255)
     offsetLabel.Font = Enum.Font.GothamSemibold
     offsetLabel.TextSize = 14
     offsetLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -855,7 +920,7 @@ local function createTeleporterGui()
             autoTeleporting = not autoTeleporting
             
             -- Update button text
-            local button = player.PlayerGui.TeleporterGui.MainPanel.AutoTeleportButton
+            local button = teleporterGui.MainPanel.AutoTeleportButton
             button.Text = "AUTO TP: " .. (autoTeleporting and "ON" or "OFF")
             button.BackgroundColor3 = autoTeleporting and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(255, 0, 0)
             
@@ -900,9 +965,15 @@ local function createTeleporterGui()
                     -- Enable flying
                     local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
                     if humanoid then
-                        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+                        pcall(function()
+                            humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+                        end)
                     end
-                    ownRootPart.Anchored = true
+                    
+                    pcall(function()
+                        ownRootPart.Anchored = true
+                    end)
+                    
                     flyEnabled = true
                     
                     game.StarterGui:SetCore("SendNotification", {
@@ -919,6 +990,11 @@ local function createTeleporterGui()
             if not success then
                 -- Try backup method
                 success = flyToPlayerBackup(selectedPlayer)
+                
+                if not success then
+                    -- Try third method
+                    success = flyToPlayerMoveTo(selectedPlayer)
+                end
             end
             
             if not success and flyEnabled then
@@ -951,7 +1027,7 @@ local function createTeleporterGui()
             autoFlying = not autoFlying
             
             -- Update button text
-            local button = player.PlayerGui.TeleporterGui.MainPanel.AutoFlyButton
+            local button = teleporterGui.MainPanel.AutoFlyButton
             button.Text = "AUTO FLY: " .. (autoFlying and "ON" or "OFF")
             button.BackgroundColor3 = autoFlying and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(0, 0, 255)
             
@@ -962,9 +1038,15 @@ local function createTeleporterGui()
                     -- Enable flying
                     local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
                     if humanoid then
-                        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+                        pcall(function()
+                            humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+                        end)
                     end
-                    ownRootPart.Anchored = true
+                    
+                    pcall(function()
+                        ownRootPart.Anchored = true
+                    end)
+                    
                     flyEnabled = true
                 end
             end
@@ -1001,6 +1083,15 @@ end
 
 -- Function to create a button to open the teleporter
 local function createOpenButton()
+    -- Remove existing button if it exists
+    if player.PlayerGui:FindFirstChild("OpenTeleporterGui") then
+        player.PlayerGui.OpenTeleporterGui:Destroy()
+    end
+    
+    local openGui = Instance.new("ScreenGui")
+    openGui.Name = "OpenTeleporterGui"
+    openGui.ResetOnSpawn = false
+    
     local openButton = Instance.new("TextButton")
     openButton.Name = "OpenTeleporterButton"
     openButton.Size = UDim2.new(0, 50, 0, 50)
@@ -1034,52 +1125,74 @@ local function createOpenButton()
         if player.PlayerGui:FindFirstChild("TeleporterGui") then
             player.PlayerGui.TeleporterGui.Enabled = true
         else
-            createTeleporterGui()
+            teleporterGui = createTeleporterGui()
         end
     end)
-    
-    local openGui = Instance.new("ScreenGui")
-    openGui.Name = "OpenTeleporterGui"
-    openGui.ResetOnSpawn = false
-    openGui.Parent = player.PlayerGui
     
     -- Make the open button draggable
     makeFrameDraggable(openButton)
     
     openButton.Parent = openGui
+    openGui.Parent = player.PlayerGui
+    
+    return openGui
 end
 
 -- Auto teleport/fly loop
-RunService.Heartbeat:Connect(function()
-    if autoTeleporting and selectedPlayer then
-        teleportToPlayer(selectedPlayer)
+local autoTeleportConnection = nil
+
+local function setupAutoTeleportLoop()
+    if autoTeleportConnection then
+        autoTeleportConnection:Disconnect()
     end
     
-    if autoFlying and selectedPlayer then
-        local success = flyToPlayer(selectedPlayer)
-        
-        if not success then
-            -- Try backup method
-            flyToPlayerBackup(selectedPlayer)
+    autoTeleportConnection = RunService.Heartbeat:Connect(function()
+        if autoTeleporting and selectedPlayer then
+            teleportToPlayer(selectedPlayer)
         end
-    end
-end)
+        
+        if autoFlying and selectedPlayer then
+            local success = flyToPlayer(selectedPlayer)
+            
+            if not success then
+                -- Try backup method
+                success = flyToPlayerBackup(selectedPlayer)
+                
+                if not success then
+                    -- Try third method
+                    flyToPlayerMoveTo(selectedPlayer)
+                end
+            end
+        end
+    end)
+end
 
 -- Function to handle character changes
 local function handleCharacterAdded(newCharacter)
     character = newCharacter
-    humanoid = character:WaitForChild("Humanoid")
-    rootPart = character:WaitForChild("HumanoidRootPart")
     
-    -- Reset flying state
-    flyEnabled = false
-    
-    -- Recreate GUI if it was destroyed
-    if player.PlayerGui:FindFirstChild("TeleporterGui") then
+    -- Wait for humanoid and root part
+    task.spawn(function()
+        humanoid = newCharacter:WaitForChild("Humanoid")
+        rootPart = newCharacter:WaitForChild("HumanoidRootPart")
+        
+        -- Reset flying state
+        flyEnabled = false
+        
+        -- Recreate GUI if it was destroyed
+        if not player.PlayerGui:FindFirstChild("TeleporterGui") then
+            teleporterGui = createTeleporterGui()
+            teleporterGui.Enabled = false
+        end
+        
+        if not player.PlayerGui:FindFirstChild("OpenTeleporterGui") then
+            openGui = createOpenButton()
+        end
+        
+        -- Restore auto features after a short delay
+        task.wait(1)
+        
         if autoTeleporting or autoFlying then
-            -- Restore auto features after a short delay
-            task.wait(1)
-            
             if autoTeleporting then
                 game.StarterGui:SetCore("SendNotification", {
                     Title = "Auto Teleport Restored",
@@ -1098,20 +1211,29 @@ local function handleCharacterAdded(newCharacter)
                 -- Re-enable flying
                 local humanoid = character:FindFirstChildOfClass("Humanoid")
                 if humanoid then
-                    humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+                    pcall(function()
+                        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+                    end)
                 end
-                rootPart.Anchored = true
+                
+                pcall(function()
+                    rootPart.Anchored = true
+                end)
+                
                 flyEnabled = true
             end
         end
-    end
+    end)
 end
 
 -- Listen for character changes
 player.CharacterAdded:Connect(handleCharacterAdded)
 
+-- Setup auto teleport loop
+setupAutoTeleportLoop()
+
 -- Create the open button
-createOpenButton()
+openGui = createOpenButton()
 
 -- Initial notification
 game.StarterGui:SetCore("SendNotification", {
