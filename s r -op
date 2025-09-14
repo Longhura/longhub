@@ -1,0 +1,1820 @@
+-- Roblox Advanced Executor GUI Script v2.0
+-- Enhanced with Mobile Support, Fly-To, Hitbox Display, and Beautiful Effects
+-- Tác giả: Assistant Enhanced Version
+-- Tính năng: Menu GUI, Teleport, Fly, Mobile Fly, Fly-To, Radius Scan, Position Display, Hitbox Visualization
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local GuiService = game:GetService("GuiService")
+local StarterGui = game:GetService("StarterGui")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Biến toàn cục
+local GUI = {}
+local isFlying = false
+local isMobileFlying = false
+local flySpeed = 16
+local flyConnection
+local mobileFlyConnection
+local scanRadius = 50
+local scanResults = {}
+local highlightFolder
+local hitboxFolder
+local isScanning = false
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+-- Tạo Highlight và Hitbox Storage
+if CoreGui:FindFirstChild("Highlight_Storage") then
+    CoreGui:FindFirstChild("Highlight_Storage"):Destroy()
+end
+highlightFolder = Instance.new("Folder")
+highlightFolder.Name = "Highlight_Storage"
+highlightFolder.Parent = CoreGui
+
+if CoreGui:FindFirstChild("Hitbox_Storage") then
+    CoreGui:FindFirstChild("Hitbox_Storage"):Destroy()
+end
+hitboxFolder = Instance.new("Folder")
+hitboxFolder.Name = "Hitbox_Storage"
+hitboxFolder.Parent = CoreGui
+
+-- Xóa GUI cũ nếu tồn tại
+if PlayerGui:FindFirstChild("AdvancedExecutorGUI") then
+    PlayerGui:FindFirstChild("AdvancedExecutorGUI"):Destroy()
+end
+
+-- Tạo Main GUI với hiệu ứng đẹp
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AdvancedExecutorGUI"
+ScreenGui.Parent = PlayerGui
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Tạo hiệu ứng blur background
+local BlurEffect = Instance.new("BlurEffect")
+BlurEffect.Name = "MenuBlur"
+BlurEffect.Size = 0
+BlurEffect.Parent = game.Lighting
+
+-- Main Frame với hiệu ứng gradient và shadow
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 450, 0, 600)
+MainFrame.Position = UDim2.new(0.5, -225, 0.5, -300)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+MainFrame.ClipsDescendants = true
+
+-- Tạo gradient background
+local GradientFrame = Instance.new("Frame")
+GradientFrame.Name = "GradientFrame"
+GradientFrame.Size = UDim2.new(1, 0, 1, 0)
+GradientFrame.Position = UDim2.new(0, 0, 0, 0)
+GradientFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+GradientFrame.BorderSizePixel = 0
+GradientFrame.Parent = MainFrame
+
+local Gradient = Instance.new("UIGradient")
+Gradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(25, 25, 35)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(35, 35, 55)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(45, 45, 65))
+}
+Gradient.Rotation = 45
+Gradient.Parent = GradientFrame
+
+-- Tạo bo góc cho MainFrame
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.Parent = MainFrame
+
+local GradientCorner = Instance.new("UICorner")
+GradientCorner.CornerRadius = UDim.new(0, 12)
+GradientCorner.Parent = GradientFrame
+
+-- Tạo shadow effect
+local ShadowFrame = Instance.new("Frame")
+ShadowFrame.Name = "ShadowFrame"
+ShadowFrame.Size = UDim2.new(1, 20, 1, 20)
+ShadowFrame.Position = UDim2.new(0, -10, 0, -10)
+ShadowFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ShadowFrame.BackgroundTransparency = 0.8
+ShadowFrame.BorderSizePixel = 0
+ShadowFrame.ZIndex = MainFrame.ZIndex - 1
+ShadowFrame.Parent = ScreenGui
+
+local ShadowCorner = Instance.new("UICorner")
+ShadowCorner.CornerRadius = UDim.new(0, 12)
+ShadowCorner.Parent = ShadowFrame
+
+-- Animated border effect
+local BorderFrame = Instance.new("Frame")
+BorderFrame.Name = "BorderFrame"
+BorderFrame.Size = UDim2.new(1, 4, 1, 4)
+BorderFrame.Position = UDim2.new(0, -2, 0, -2)
+BorderFrame.BackgroundTransparency = 1
+BorderFrame.BorderSizePixel = 0
+BorderFrame.ZIndex = MainFrame.ZIndex + 10
+BorderFrame.Parent = ScreenGui
+
+local BorderStroke = Instance.new("UIStroke")
+BorderStroke.Color = Color3.fromRGB(100, 200, 255)
+BorderStroke.Thickness = 2
+BorderStroke.Transparency = 0.3
+BorderStroke.Parent = MainFrame
+
+local BorderCorner2 = Instance.new("UICorner")
+BorderCorner2.CornerRadius = UDim.new(0, 12)
+BorderCorner2.Parent = BorderFrame
+
+-- Animate border color
+local borderColorTween = TweenService:Create(
+    BorderStroke,
+    TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+    {Color = Color3.fromRGB(255, 100, 200)}
+)
+borderColorTween:Play()
+
+-- Title Bar với hiệu ứng đẹp
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Size = UDim2.new(1, 0, 0, 40)
+TitleBar.Position = UDim2.new(0, 0, 0, 0)
+TitleBar.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 12)
+TitleCorner.Parent = TitleBar
+
+-- Title gradient
+local TitleGradient = Instance.new("UIGradient")
+TitleGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(15, 15, 25)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 45))
+}
+TitleGradient.Rotation = 90
+TitleGradient.Parent = TitleBar
+
+-- Title Text với hiệu ứng glow
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Size = UDim2.new(1, -120, 1, 0)
+TitleLabel.Position = UDim2.new(0, 15, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "🚀 Advanced Executor v2.0 Pro"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 18
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TitleBar
+
+-- Glow effect cho title
+local TitleStroke = Instance.new("UIStroke")
+TitleStroke.Color = Color3.fromRGB(100, 200, 255)
+TitleStroke.Thickness = 1
+TitleStroke.Transparency = 0.5
+TitleStroke.Parent = TitleLabel
+
+-- Status indicator
+local StatusIndicator = Instance.new("Frame")
+StatusIndicator.Name = "StatusIndicator"
+StatusIndicator.Size = UDim2.new(0, 12, 0, 12)
+StatusIndicator.Position = UDim2.new(1, -100, 0.5, -6)
+StatusIndicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+StatusIndicator.BorderSizePixel = 0
+StatusIndicator.Parent = TitleBar
+
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.CornerRadius = UDim.new(0, 6)
+StatusCorner.Parent = StatusIndicator
+
+-- Animate status indicator
+local statusTween = TweenService:Create(
+    StatusIndicator,
+    TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+    {BackgroundTransparency = 0.3}
+)
+statusTween:Play()
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Name = "StatusLabel"
+StatusLabel.Size = UDim2.new(0, 60, 1, 0)
+StatusLabel.Position = UDim2.new(1, -85, 0, 0)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "ONLINE"
+StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+StatusLabel.TextSize = 10
+StatusLabel.Font = Enum.Font.GothamBold
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+StatusLabel.Parent = TitleBar
+
+-- Minimize Button với hiệu ứng hover
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Name = "MinimizeButton"
+MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+MinimizeButton.Position = UDim2.new(1, -70, 0, 5)
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(255, 193, 7)
+MinimizeButton.Text = "─"
+MinimizeButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+MinimizeButton.TextSize = 16
+MinimizeButton.Font = Enum.Font.GothamBold
+MinimizeButton.BorderSizePixel = 0
+MinimizeButton.Parent = TitleBar
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 6)
+MinCorner.Parent = MinimizeButton
+
+-- Close Button với hiệu ứng hover
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -35, 0, 5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
+CloseButton.Text = "✕"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 14
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.BorderSizePixel = 0
+CloseButton.Parent = TitleBar
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseButton
+
+-- Hover effects cho buttons
+local function createHoverEffect(button, hoverColor, originalColor)
+    button.MouseEnter:Connect(function()
+        local hoverTween = TweenService:Create(
+            button,
+            TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {BackgroundColor3 = hoverColor, Size = button.Size + UDim2.new(0, 2, 0, 2)}
+        )
+        hoverTween:Play()
+    end)
+    
+    button.MouseLeave:Connect(function()
+        local leaveTween = TweenService:Create(
+            button,
+            TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {BackgroundColor3 = originalColor, Size = button.Size - UDim2.new(0, 2, 0, 2)}
+        )
+        leaveTween:Play()
+    end)
+end
+
+createHoverEffect(MinimizeButton, Color3.fromRGB(255, 213, 47), Color3.fromRGB(255, 193, 7))
+createHoverEffect(CloseButton, Color3.fromRGB(240, 73, 89), Color3.fromRGB(220, 53, 69))
+
+-- Content Frame với scroll
+local ContentFrame = Instance.new("ScrollingFrame")
+ContentFrame.Name = "ContentFrame"
+ContentFrame.Size = UDim2.new(1, -20, 1, -50)
+ContentFrame.Position = UDim2.new(0, 10, 0, 45)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.BorderSizePixel = 0
+ContentFrame.ScrollBarThickness = 6
+ContentFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 200, 255)
+ContentFrame.CanvasSize = UDim2.new(0, 0, 0, 1200)
+ContentFrame.Parent = MainFrame
+
+-- Position Display Section với hiệu ứng đẹp
+local PositionFrame = Instance.new("Frame")
+PositionFrame.Name = "PositionFrame"
+PositionFrame.Size = UDim2.new(1, 0, 0, 80)
+PositionFrame.Position = UDim2.new(0, 0, 0, 10)
+PositionFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
+PositionFrame.BorderSizePixel = 0
+PositionFrame.Parent = ContentFrame
+
+local PosCorner = Instance.new("UICorner")
+PosCorner.CornerRadius = UDim.new(0, 8)
+PosCorner.Parent = PositionFrame
+
+local PosGradient = Instance.new("UIGradient")
+PosGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 35, 55)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(45, 45, 75))
+}
+PosGradient.Rotation = 45
+PosGradient.Parent = PositionFrame
+
+local PositionIcon = Instance.new("TextLabel")
+PositionIcon.Name = "PositionIcon"
+PositionIcon.Size = UDim2.new(0, 30, 0, 30)
+PositionIcon.Position = UDim2.new(0, 10, 0, 10)
+PositionIcon.BackgroundTransparency = 1
+PositionIcon.Text = "📍"
+PositionIcon.TextSize = 20
+PositionIcon.Font = Enum.Font.Gotham
+PositionIcon.Parent = PositionFrame
+
+local PositionLabel = Instance.new("TextLabel")
+PositionLabel.Name = "PositionLabel"
+PositionLabel.Size = UDim2.new(1, -50, 0, 25)
+PositionLabel.Position = UDim2.new(0, 45, 0, 10)
+PositionLabel.BackgroundTransparency = 1
+PositionLabel.Text = "Vị trí hiện tại:"
+PositionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+PositionLabel.TextSize = 14
+PositionLabel.Font = Enum.Font.GothamBold
+PositionLabel.TextXAlignment = Enum.TextXAlignment.Left
+PositionLabel.Parent = PositionFrame
+
+local CurrentPosLabel = Instance.new("TextLabel")
+CurrentPosLabel.Name = "CurrentPosLabel"
+CurrentPosLabel.Size = UDim2.new(1, -50, 0, 25)
+CurrentPosLabel.Position = UDim2.new(0, 45, 0, 35)
+CurrentPosLabel.BackgroundTransparency = 1
+CurrentPosLabel.Text = "X: 0, Y: 0, Z: 0"
+CurrentPosLabel.TextColor3 = Color3.fromRGB(0, 255, 128)
+CurrentPosLabel.TextSize = 12
+CurrentPosLabel.Font = Enum.Font.GothamBold
+CurrentPosLabel.TextXAlignment = Enum.TextXAlignment.Left
+CurrentPosLabel.Parent = PositionFrame
+
+local CoordinatesCopyButton = Instance.new("TextButton")
+CoordinatesCopyButton.Name = "CoordinatesCopyButton"
+CoordinatesCopyButton.Size = UDim2.new(0, 60, 0, 20)
+CoordinatesCopyButton.Position = UDim2.new(1, -70, 0, 55)
+CoordinatesCopyButton.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
+CoordinatesCopyButton.Text = "Copy"
+CoordinatesCopyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CoordinatesCopyButton.TextSize = 10
+CoordinatesCopyButton.Font = Enum.Font.GothamBold
+CoordinatesCopyButton.BorderSizePixel = 0
+CoordinatesCopyButton.Parent = PositionFrame
+
+local CopyCorner = Instance.new("UICorner")
+CopyCorner.CornerRadius = UDim.new(0, 4)
+CopyCorner.Parent = CoordinatesCopyButton
+
+-- Teleport Section với hiệu ứng đẹp
+local TeleportFrame = Instance.new("Frame")
+TeleportFrame.Name = "TeleportFrame"
+TeleportFrame.Size = UDim2.new(1, 0, 0, 120)
+TeleportFrame.Position = UDim2.new(0, 0, 0, 100)
+TeleportFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
+TeleportFrame.BorderSizePixel = 0
+TeleportFrame.Parent = ContentFrame
+
+local TeleCorner = Instance.new("UICorner")
+TeleCorner.CornerRadius = UDim.new(0, 8)
+TeleCorner.Parent = TeleportFrame
+
+local TeleGradient = Instance.new("UIGradient")
+TeleGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 35, 55)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(45, 45, 75))
+}
+TeleGradient.Rotation = 45
+TeleGradient.Parent = TeleportFrame
+
+local TeleportIcon = Instance.new("TextLabel")
+TeleportIcon.Name = "TeleportIcon"
+TeleportIcon.Size = UDim2.new(0, 30, 0, 30)
+TeleportIcon.Position = UDim2.new(0, 10, 0, 10)
+TeleportIcon.BackgroundTransparency = 1
+TeleportIcon.Text = "🌐"
+TeleportIcon.TextSize = 20
+TeleportIcon.Font = Enum.Font.Gotham
+TeleportIcon.Parent = TeleportFrame
+
+local TeleportTitle = Instance.new("TextLabel")
+TeleportTitle.Name = "TeleportTitle"
+TeleportTitle.Size = UDim2.new(1, -50, 0, 25)
+TeleportTitle.Position = UDim2.new(0, 45, 0, 10)
+TeleportTitle.BackgroundTransparency = 1
+TeleportTitle.Text = "Dịch chuyển tọa độ"
+TeleportTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+TeleportTitle.TextSize = 14
+TeleportTitle.Font = Enum.Font.GothamBold
+TeleportTitle.TextXAlignment = Enum.TextXAlignment.Left
+TeleportTitle.Parent = TeleportFrame
+
+-- Input Fields với hiệu ứng focus
+local function createInputField(name, placeholder, position, parent)
+    local input = Instance.new("TextBox")
+    input.Name = name
+    input.Size = UDim2.new(0.3, -5, 0, 30)
+    input.Position = position
+    input.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    input.Text = placeholder
+    input.PlaceholderText = placeholder
+    input.TextColor3 = Color3.fromRGB(255, 255, 255)
+    input.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    input.TextSize = 12
+    input.Font = Enum.Font.Gotham
+    input.BorderSizePixel = 0
+    input.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = input
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(100, 100, 120)
+    stroke.Thickness = 1
+    stroke.Transparency = 0.5
+    stroke.Parent = input
+    
+    -- Focus effects
+    input.Focused:Connect(function()
+        local focusTween = TweenService:Create(
+            stroke,
+            TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Color = Color3.fromRGB(100, 200, 255), Transparency = 0}
+        )
+        focusTween:Play()
+        
+        if input.Text == placeholder then
+            input.Text = ""
+        end
+    end)
+    
+    input.FocusLost:Connect(function()
+        local unfocusTween = TweenService:Create(
+            stroke,
+            TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Color = Color3.fromRGB(100, 100, 120), Transparency = 0.5}
+        )
+        unfocusTween:Play()
+        
+        if input.Text == "" then
+            input.Text = placeholder
+        end
+    end)
+    
+    return input
+end
+
+local XInput = createInputField("XInput", "X", UDim2.new(0, 10, 0, 45), TeleportFrame)
+local YInput = createInputField("YInput", "Y", UDim2.new(0.35, 0, 0, 45), TeleportFrame)
+local ZInput = createInputField("ZInput", "Z", UDim2.new(0.7, 0, 0, 45), TeleportFrame)
+
+-- Enhanced buttons với hiệu ứng đẹp
+local function createEnhancedButton(name, text, position, size, color, parent)
+    local button = Instance.new("TextButton")
+    button.Name = name
+    button.Size = size
+    button.Position = position
+    button.BackgroundColor3 = color
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextSize = 12
+    button.Font = Enum.Font.GothamBold
+    button.BorderSizePixel = 0
+    button.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = button
+    
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, color),
+        ColorSequenceKeypoint.new(1, Color3.new(color.R * 0.8, color.G * 0.8, color.B * 0.8))
+    }
+    gradient.Rotation = 90
+    gradient.Parent = button
+    
+    -- Click animation
+    button.MouseButton1Down:Connect(function()
+        local clickTween = TweenService:Create(
+            button,
+            TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Size = size - UDim2.new(0, 4, 0, 4)}
+        )
+        clickTween:Play()
+    end)
+    
+    button.MouseButton1Up:Connect(function()
+        local releaseTween = TweenService:Create(
+            button,
+            TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Size = size}
+        )
+        releaseTween:Play()
+    end)
+    
+    return button
+end
+
+local TeleportButton = createEnhancedButton(
+    "TeleportButton", 
+    "🚀 Dịch chuyển", 
+    UDim2.new(0, 10, 0, 85), 
+    UDim2.new(0.3, -5, 0, 25), 
+    Color3.fromRGB(40, 167, 69), 
+    TeleportFrame
+)
+
+local FlyToButton = createEnhancedButton(
+    "FlyToButton", 
+    "✈️ Bay đến", 
+    UDim2.new(0.35, 0, 0, 85), 
+    UDim2.new(0.3, -5, 0, 25), 
+    Color3.fromRGB(255, 193, 7), 
+    TeleportFrame
+)
+
+local FlyButton = createEnhancedButton(
+    "FlyButton", 
+    "🕊️ Bật Bay", 
+    UDim2.new(0.7, 0, 0, 85), 
+    UDim2.new(0.3, -5, 0, 25), 
+    Color3.fromRGB(23, 162, 184), 
+    TeleportFrame
+)
+
+-- Speed Control Section với textbox thay vì slider
+local SpeedFrame = Instance.new("Frame")
+SpeedFrame.Name = "SpeedFrame"
+SpeedFrame.Size = UDim2.new(1, 0, 0, 80)
+SpeedFrame.Position = UDim2.new(0, 0, 0, 230)
+SpeedFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
+SpeedFrame.BorderSizePixel = 0
+SpeedFrame.Parent = ContentFrame
+
+local SpeedCorner = Instance.new("UICorner")
+SpeedCorner.CornerRadius = UDim.new(0, 8)
+SpeedCorner.Parent = SpeedFrame
+
+local SpeedGradient = Instance.new("UIGradient")
+SpeedGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 35, 55)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(45, 45, 75))
+}
+SpeedGradient.Rotation = 45
+SpeedGradient.Parent = SpeedFrame
+
+local SpeedIcon = Instance.new("TextLabel")
+SpeedIcon.Name = "SpeedIcon"
+SpeedIcon.Size = UDim2.new(0, 30, 0, 30)
+SpeedIcon.Position = UDim2.new(0, 10, 0, 10)
+SpeedIcon.BackgroundTransparency = 1
+SpeedIcon.Text = "⚡"
+SpeedIcon.TextSize = 20
+SpeedIcon.Font = Enum.Font.Gotham
+SpeedIcon.Parent = SpeedFrame
+
+local SpeedTitle = Instance.new("TextLabel")
+SpeedTitle.Name = "SpeedTitle"
+SpeedTitle.Size = UDim2.new(0.5, -50, 0, 25)
+SpeedTitle.Position = UDim2.new(0, 45, 0, 10)
+SpeedTitle.BackgroundTransparency = 1
+SpeedTitle.Text = "Tốc độ bay:"
+SpeedTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedTitle.TextSize = 14
+SpeedTitle.Font = Enum.Font.GothamBold
+SpeedTitle.TextXAlignment = Enum.TextXAlignment.Left
+SpeedTitle.Parent = SpeedFrame
+
+-- Speed input textbox
+local SpeedInput = createInputField("SpeedInput", "16", UDim2.new(0, 45, 0, 40), SpeedFrame)
+SpeedInput.Size = UDim2.new(0, 100, 0, 30)
+
+local SpeedApplyButton = createEnhancedButton(
+    "SpeedApplyButton", 
+    "Áp dụng", 
+    UDim2.new(0, 155, 0, 40), 
+    UDim2.new(0, 80, 0, 30), 
+    Color3.fromRGB(100, 200, 255), 
+    SpeedFrame
+)
+
+-- Mobile Fly Section (chỉ hiện khi là mobile)
+local MobileFlyFrame
+if isMobile then
+    MobileFlyFrame = Instance.new("Frame")
+    MobileFlyFrame.Name = "MobileFlyFrame"
+    MobileFlyFrame.Size = UDim2.new(1, 0, 0, 120)
+    MobileFlyFrame.Position = UDim2.new(0, 0, 0, 320)
+    MobileFlyFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
+    MobileFlyFrame.BorderSizePixel = 0
+    MobileFlyFrame.Parent = ContentFrame
+    
+    local MobileCorner = Instance.new("UICorner")
+    MobileCorner.CornerRadius = UDim.new(0, 8)
+    MobileCorner.Parent = MobileFlyFrame
+    
+    local MobileGradient = Instance.new("UIGradient")
+    MobileGradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 35, 55)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(45, 45, 75))
+    }
+    MobileGradient.Rotation = 45
+    MobileGradient.Parent = MobileFlyFrame
+    
+    local MobileIcon = Instance.new("TextLabel")
+    MobileIcon.Name = "MobileIcon"
+    MobileIcon.Size = UDim2.new(0, 30, 0, 30)
+    MobileIcon.Position = UDim2.new(0, 10, 0, 10)
+    MobileIcon.BackgroundTransparency = 1
+    MobileIcon.Text = "📱"
+    MobileIcon.TextSize = 20
+    MobileIcon.Font = Enum.Font.Gotham
+    MobileIcon.Parent = MobileFlyFrame
+    
+    local MobileTitle = Instance.new("TextLabel")
+    MobileTitle.Name = "MobileTitle"
+    MobileTitle.Size = UDim2.new(1, -50, 0, 25)
+    MobileTitle.Position = UDim2.new(0, 45, 0, 10)
+    MobileTitle.BackgroundTransparency = 1
+    MobileTitle.Text = "Điều khiển bay Mobile"
+    MobileTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    MobileTitle.TextSize = 14
+    MobileTitle.Font = Enum.Font.GothamBold
+    MobileTitle.TextXAlignment = Enum.TextXAlignment.Left
+    MobileTitle.Parent = MobileFlyFrame
+    
+    local MobileFlyButton = createEnhancedButton(
+        "MobileFlyButton", 
+        "📱 Bay Mobile", 
+        UDim2.new(0, 10, 0, 45), 
+        UDim2.new(0.3, -5, 0, 30), 
+        Color3.fromRGB(255, 87, 34), 
+        MobileFlyFrame
+    )
+    
+    local MobileUpButton = createEnhancedButton(
+        "MobileUpButton", 
+        "⬆️ Lên", 
+        UDim2.new(0.35, 0, 0, 45), 
+        UDim2.new(0.15, -5, 0, 30), 
+        Color3.fromRGB(76, 175, 80), 
+        MobileFlyFrame
+    )
+    
+    local MobileDownButton = createEnhancedButton(
+        "MobileDownButton", 
+        "⬇️ Xuống", 
+        UDim2.new(0.52, 0, 0, 45), 
+        UDim2.new(0.15, -5, 0, 30), 
+        Color3.fromRGB(244, 67, 54), 
+        MobileFlyFrame
+    )
+    
+    local MobileStopButton = createEnhancedButton(
+        "MobileStopButton", 
+        "⏹️ Dừng", 
+        UDim2.new(0.7, 0, 0, 45), 
+        UDim2.new(0.3, -5, 0, 30), 
+        Color3.fromRGB(158, 158, 158), 
+        MobileFlyFrame
+    )
+    
+    local MobileInstructions = Instance.new("TextLabel")
+    MobileInstructions.Name = "MobileInstructions"
+    MobileInstructions.Size = UDim2.new(1, -20, 0, 35)
+    MobileInstructions.Position = UDim2.new(0, 10, 0, 80)
+    MobileInstructions.BackgroundTransparency = 1
+    MobileInstructions.Text = "Sử dụng joystick ảo để di chuyển khi bay Mobile được bật"
+    MobileInstructions.TextColor3 = Color3.fromRGB(200, 200, 200)
+    MobileInstructions.TextSize = 10
+    MobileInstructions.Font = Enum.Font.Gotham
+    MobileInstructions.TextWrapped = true
+    MobileInstructions.TextXAlignment = Enum.TextXAlignment.Left
+    MobileInstructions.Parent = MobileFlyFrame
+end
+
+-- Scan Section với hiệu ứng đẹp
+local ScanFrame = Instance.new("Frame")
+ScanFrame.Name = "ScanFrame"
+ScanFrame.Size = UDim2.new(1, 0, 0, 140)
+ScanFrame.Position = UDim2.new(0, 0, 0, isMobile and 450 or 320)
+ScanFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
+ScanFrame.BorderSizePixel = 0
+ScanFrame.Parent = ContentFrame
+
+local ScanCorner = Instance.new("UICorner")
+ScanCorner.CornerRadius = UDim.new(0, 8)
+ScanCorner.Parent = ScanFrame
+
+local ScanGradient = Instance.new("UIGradient")
+ScanGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 35, 55)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(45, 45, 75))
+}
+ScanGradient.Rotation = 45
+ScanGradient.Parent = ScanFrame
+
+local ScanIcon = Instance.new("TextLabel")
+ScanIcon.Name = "ScanIcon"
+ScanIcon.Size = UDim2.new(0, 30, 0, 30)
+ScanIcon.Position = UDim2.new(0, 10, 0, 10)
+ScanIcon.BackgroundTransparency = 1
+ScanIcon.Text = "🔍"
+ScanIcon.TextSize = 20
+ScanIcon.Font = Enum.Font.Gotham
+ScanIcon.Parent = ScanFrame
+
+local ScanTitle = Instance.new("TextLabel")
+ScanTitle.Name = "ScanTitle"
+ScanTitle.Size = UDim2.new(1, -50, 0, 25)
+ScanTitle.Position = UDim2.new(0, 45, 0, 10)
+ScanTitle.BackgroundTransparency = 1
+ScanTitle.Text = "Quét và phân tích khu vực"
+ScanTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+ScanTitle.TextSize = 14
+ScanTitle.Font = Enum.Font.GothamBold
+ScanTitle.TextXAlignment = Enum.TextXAlignment.Left
+ScanTitle.Parent = ScanFrame
+
+local RadiusInput = createInputField("RadiusInput", "50", UDim2.new(0, 10, 0, 45), ScanFrame)
+RadiusInput.Size = UDim2.new(0, 100, 0, 30)
+
+local RadiusLabel = Instance.new("TextLabel")
+RadiusLabel.Name = "RadiusLabel"
+RadiusLabel.Size = UDim2.new(0, 100, 0, 30)
+RadiusLabel.Position = UDim2.new(0, 120, 0, 45)
+RadiusLabel.BackgroundTransparency = 1
+RadiusLabel.Text = "Bán kính quét"
+RadiusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+RadiusLabel.TextSize = 12
+RadiusLabel.Font = Enum.Font.Gotham
+RadiusLabel.TextXAlignment = Enum.TextXAlignment.Left
+RadiusLabel.Parent = ScanFrame
+
+local ScanButton = createEnhancedButton(
+    "ScanButton", 
+    "🔍 Quét khu vực", 
+    UDim2.new(0, 10, 0, 85), 
+    UDim2.new(0.48, -5, 0, 35), 
+    Color3.fromRGB(255, 193, 7), 
+    ScanFrame
+)
+
+local ShowHitboxButton = createEnhancedButton(
+    "ShowHitboxButton", 
+    "📦 Hiện Hitbox", 
+    UDim2.new(0.52, 0, 0, 85), 
+    UDim2.new(0.48, -5, 0, 35), 
+    Color3.fromRGB(156, 39, 176), 
+    ScanFrame
+)
+
+-- Scan Results GUI với hiệu ứng đẹp
+local ScanResultsGui = Instance.new("ScreenGui")
+ScanResultsGui.Name = "ScanResultsGUI"
+ScanResultsGui.Parent = PlayerGui
+ScanResultsGui.ResetOnSpawn = false
+ScanResultsGui.Enabled = false
+
+local ResultsFrame = Instance.new("Frame")
+ResultsFrame.Name = "ResultsFrame"
+ResultsFrame.Size = UDim2.new(0, 600, 0, 500)
+ResultsFrame.Position = UDim2.new(0.5, -300, 0.5, -250)
+ResultsFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+ResultsFrame.BorderSizePixel = 0
+ResultsFrame.Active = true
+ResultsFrame.Draggable = true
+ResultsFrame.Parent = ScanResultsGui
+
+local ResultsCorner = Instance.new("UICorner")
+ResultsCorner.CornerRadius = UDim.new(0, 12)
+ResultsCorner.Parent = ResultsFrame
+
+local ResultsGradient = Instance.new("UIGradient")
+ResultsGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(25, 25, 35)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(45, 45, 65))
+}
+ResultsGradient.Rotation = 45
+ResultsGradient.Parent = ResultsFrame
+
+-- Results Title Bar
+local ResultsTitleBar = Instance.new("Frame")
+ResultsTitleBar.Name = "ResultsTitleBar"
+ResultsTitleBar.Size = UDim2.new(1, 0, 0, 40)
+ResultsTitleBar.Position = UDim2.new(0, 0, 0, 0)
+ResultsTitleBar.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+ResultsTitleBar.BorderSizePixel = 0
+ResultsTitleBar.Parent = ResultsFrame
+
+local ResultsTitleCorner = Instance.new("UICorner")
+ResultsTitleCorner.CornerRadius = UDim.new(0, 12)
+ResultsTitleCorner.Parent = ResultsTitleBar
+
+local ResultsTitleLabel = Instance.new("TextLabel")
+ResultsTitleLabel.Name = "ResultsTitleLabel"
+ResultsTitleLabel.Size = UDim2.new(1, -50, 1, 0)
+ResultsTitleLabel.Position = UDim2.new(0, 15, 0, 0)
+ResultsTitleLabel.BackgroundTransparency = 1
+ResultsTitleLabel.Text = "🔍 Kết quả quét bán kính - Phân tích chi tiết"
+ResultsTitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+ResultsTitleLabel.TextSize = 16
+ResultsTitleLabel.Font = Enum.Font.GothamBold
+ResultsTitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+ResultsTitleLabel.Parent = ResultsTitleBar
+
+local ResultsCloseButton = createEnhancedButton(
+    "ResultsCloseButton", 
+    "✕", 
+    UDim2.new(1, -35, 0, 5), 
+    UDim2.new(0, 30, 0, 30), 
+    Color3.fromRGB(220, 53, 69), 
+    ResultsTitleBar
+)
+
+-- Scrolling Frame for Results với hiệu ứng đẹp
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Name = "ScrollFrame"
+ScrollFrame.Size = UDim2.new(1, -20, 1, -50)
+ScrollFrame.Position = UDim2.new(0, 10, 0, 45)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.ScrollBarThickness = 8
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 200, 255)
+ScrollFrame.Parent = ResultsFrame
+
+-- Mobile Virtual Joystick (chỉ cho mobile fly)
+local VirtualJoystick
+if isMobile then
+    VirtualJoystick = Instance.new("ScreenGui")
+    VirtualJoystick.Name = "VirtualJoystick"
+    VirtualJoystick.Parent = PlayerGui
+    VirtualJoystick.ResetOnSpawn = false
+    VirtualJoystick.Enabled = false
+    
+    local JoystickFrame = Instance.new("Frame")
+    JoystickFrame.Name = "JoystickFrame"
+    JoystickFrame.Size = UDim2.new(0, 120, 0, 120)
+    JoystickFrame.Position = UDim2.new(0, 50, 1, -170)
+    JoystickFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    JoystickFrame.BackgroundTransparency = 0.5
+    JoystickFrame.BorderSizePixel = 0
+    JoystickFrame.Parent = VirtualJoystick
+    
+    local JoystickCorner = Instance.new("UICorner")
+    JoystickCorner.CornerRadius = UDim.new(0, 60)
+    JoystickCorner.Parent = JoystickFrame
+    
+    local JoystickKnob = Instance.new("Frame")
+    JoystickKnob.Name = "JoystickKnob"
+    JoystickKnob.Size = UDim2.new(0, 40, 0, 40)
+    JoystickKnob.Position = UDim2.new(0.5, -20, 0.5, -20)
+    JoystickKnob.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
+    JoystickKnob.BorderSizePixel = 0
+    JoystickKnob.Parent = JoystickFrame
+    
+    local KnobCorner = Instance.new("UICorner")
+    KnobCorner.CornerRadius = UDim.new(0, 20)
+    KnobCorner.Parent = JoystickKnob
+end
+
+-- Functions với hiệu ứng và tối ưu hóa
+
+local function updatePosition()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local pos = LocalPlayer.Character.HumanoidRootPart.Position
+        CurrentPosLabel.Text = string.format("X: %.1f, Y: %.1f, Z: %.1f", pos.X, pos.Y, pos.Z)
+    end
+end
+
+local function showNotification(message, color)
+    local notification = Instance.new("Frame")
+    notification.Name = "Notification"
+    notification.Size = UDim2.new(0, 300, 0, 60)
+    notification.Position = UDim2.new(1, -320, 0, 20)
+    notification.BackgroundColor3 = color or Color3.fromRGB(40, 167, 69)
+    notification.BorderSizePixel = 0
+    notification.Parent = ScreenGui
+    
+    local notifCorner = Instance.new("UICorner")
+    notifCorner.CornerRadius = UDim.new(0, 8)
+    notifCorner.Parent = notification
+    
+    local notifText = Instance.new("TextLabel")
+    notifText.Size = UDim2.new(1, -20, 1, 0)
+    notifText.Position = UDim2.new(0, 10, 0, 0)
+    notifText.BackgroundTransparency = 1
+    notifText.Text = message
+    notifText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    notifText.TextSize = 12
+    notifText.Font = Enum.Font.GothamBold
+    notifText.TextWrapped = true
+    notifText.Parent = notification
+    
+    -- Slide in animation
+    local slideIn = TweenService:Create(
+        notification,
+        TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        {Position = UDim2.new(1, -320, 0, 20)}
+    )
+    slideIn:Play()
+    
+    -- Auto remove after 3 seconds
+    wait(3)
+    local slideOut = TweenService:Create(
+        notification,
+        TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        {Position = UDim2.new(1, 0, 0, 20)}
+    )
+    slideOut:Play()
+    slideOut.Completed:Connect(function()
+        notification:Destroy()
+    end)
+end
+
+local function teleportTo(x, y, z)
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(x, y, z)
+        showNotification(string.format("Đã dịch chuyển đến: %.1f, %.1f, %.1f", x, y, z), Color3.fromRGB(40, 167, 69))
+    end
+end
+
+local function flyToPosition(x, y, z)
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        showNotification("Không thể bay đến vị trí!", Color3.fromRGB(220, 53, 69))
+        return
+    end
+    
+    local character = LocalPlayer.Character
+    local humanoidRootPart = character.HumanoidRootPart
+    local startPos = humanoidRootPart.Position
+    local targetPos = Vector3.new(x, y, z)
+    local distance = (targetPos - startPos).Magnitude
+    local flyTime = distance / flySpeed
+    
+    showNotification(string.format("Đang bay đến: %.1f, %.1f, %.1f", x, y, z), Color3.fromRGB(255, 193, 7))
+    
+    -- Create smooth flying motion
+    local flyTween = TweenService:Create(
+        humanoidRootPart,
+        TweenInfo.new(flyTime, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+        {CFrame = CFrame.new(targetPos)}
+    )
+    
+    flyTween:Play()
+    flyTween.Completed:Connect(function()
+        showNotification("Đã đến nơi!", Color3.fromRGB(40, 167, 69))
+    end)
+end
+
+local function toggleFly()
+    if not isFlying then
+        isFlying = true
+        FlyButton.Text = "🛑 Tắt Bay"
+        FlyButton.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
+        showNotification("Chế độ bay đã được bật!", Color3.fromRGB(23, 162, 184))
+        
+        local character = LocalPlayer.Character
+        if character and character:FindFirstChild("Humanoid") and character:FindFirstChild("HumanoidRootPart") then
+            local humanoid = character.Humanoid
+            local rootPart = character.HumanoidRootPart
+            
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            bodyVelocity.Parent = rootPart
+            
+            local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+            bodyAngularVelocity.MaxTorque = Vector3.new(0, math.huge, 0)
+            bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
+            bodyAngularVelocity.Parent = rootPart
+            
+            flyConnection = RunService.Heartbeat:Connect(function()
+                if isFlying and character and character.Parent and rootPart and rootPart.Parent then
+                    local camera = Workspace.CurrentCamera
+                    local moveVector = humanoid.MoveDirection
+                    
+                    bodyVelocity.Velocity = ((camera.CFrame.RightVector * moveVector.X) + 
+                                           (camera.CFrame.LookVector * moveVector.Z)) * flySpeed
+                                           
+                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                        bodyVelocity.Velocity = bodyVelocity.Velocity + Vector3.new(0, flySpeed, 0)
+                    elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                        bodyVelocity.Velocity = bodyVelocity.Velocity - Vector3.new(0, flySpeed, 0)
+                    end
+                end
+            end)
+        end
+    else
+        isFlying = false
+        FlyButton.Text = "🕊️ Bật Bay"
+        FlyButton.BackgroundColor3 = Color3.fromRGB(23, 162, 184)
+        showNotification("Chế độ bay đã được tắt!", Color3.fromRGB(220, 53, 69))
+        
+        if flyConnection then
+            flyConnection:Disconnect()
+            flyConnection = nil
+        end
+        
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local rootPart = LocalPlayer.Character.HumanoidRootPart
+            if rootPart:FindFirstChild("BodyVelocity") then
+                rootPart:FindFirstChild("BodyVelocity"):Destroy()
+            end
+            if rootPart:FindFirstChild("BodyAngularVelocity") then
+                rootPart:FindFirstChild("BodyAngularVelocity"):Destroy()
+            end
+        end
+    end
+end
+
+-- Mobile Fly Function
+local function toggleMobileFly()
+    if not isMobileFlying then
+        isMobileFlying = true
+        if MobileFlyFrame then
+            MobileFlyFrame:FindFirstChild("MobileFlyButton").Text = "📱 Tắt Bay Mobile"
+            MobileFlyFrame:FindFirstChild("MobileFlyButton").BackgroundColor3 = Color3.fromRGB(220, 53, 69)
+        end
+        VirtualJoystick.Enabled = true
+        showNotification("Chế độ bay Mobile đã được bật!", Color3.fromRGB(255, 87, 34))
+        
+        local character = LocalPlayer.Character
+        if character and character:FindFirstChild("Humanoid") and character:FindFirstChild("HumanoidRootPart") then
+            local humanoid = character.Humanoid
+            local rootPart = character.HumanoidRootPart
+            
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            bodyVelocity.Parent = rootPart
+            
+            local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+            bodyAngularVelocity.MaxTorque = Vector3.new(0, math.huge, 0)
+            bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
+            bodyAngularVelocity.Parent = rootPart
+            
+            -- Mobile fly logic với virtual joystick
+            mobileFlyConnection = RunService.Heartbeat:Connect(function()
+                if isMobileFlying and character and character.Parent and rootPart and rootPart.Parent then
+                    local camera = Workspace.CurrentCamera
+                    -- Sử dụng joystick ảo để điều khiển
+                    local joystickFrame = VirtualJoystick:FindFirstChild("JoystickFrame")
+                    if joystickFrame then
+                        local knob = joystickFrame:FindFirstChild("JoystickKnob")
+                        local centerPos = UDim2.new(0.5, -20, 0.5, -20)
+                        local knobPos = knob.Position
+                        
+                        local deltaX = (knobPos.X.Scale - centerPos.X.Scale) * 2
+                        local deltaY = (knobPos.Y.Scale - centerPos.Y.Scale) * 2
+                        
+                        bodyVelocity.Velocity = ((camera.CFrame.RightVector * deltaX) + 
+                                               (camera.CFrame.LookVector * -deltaY)) * flySpeed
+                    end
+                end
+            end)
+        end
+    else
+        isMobileFlying = false
+        if MobileFlyFrame then
+            MobileFlyFrame:FindFirstChild("MobileFlyButton").Text = "📱 Bay Mobile"
+            MobileFlyFrame:FindFirstChild("MobileFlyButton").BackgroundColor3 = Color3.fromRGB(255, 87, 34)
+        end
+        VirtualJoystick.Enabled = false
+        showNotification("Chế độ bay Mobile đã được tắt!", Color3.fromRGB(220, 53, 69))
+        
+        if mobileFlyConnection then
+            mobileFlyConnection:Disconnect()
+            mobileFlyConnection = nil
+        end
+        
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local rootPart = LocalPlayer.Character.HumanoidRootPart
+            if rootPart:FindFirstChild("BodyVelocity") then
+                rootPart:FindFirstChild("BodyVelocity"):Destroy()
+            end
+            if rootPart:FindFirstChild("BodyAngularVelocity") then
+                rootPart:FindFirstChild("BodyAngularVelocity"):Destroy()
+            end
+        end
+    end
+end
+
+local function showHitboxes()
+    -- Clear existing hitboxes
+    for _, hitbox in pairs(hitboxFolder:GetChildren()) do
+        hitbox:Destroy()
+    end
+    
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local playerPos = LocalPlayer.Character.HumanoidRootPart.Position
+        local radius = tonumber(RadiusInput.Text) or 50
+        
+        -- Create sphere hitbox visualization
+        local hitboxSphere = Instance.new("Part")
+        hitboxSphere.Name = "ScanHitbox"
+        hitboxSphere.Size = Vector3.new(radius * 2, radius * 2, radius * 2)
+        hitboxSphere.Position = playerPos
+        hitboxSphere.Shape = Enum.PartType.Ball
+        hitboxSphere.Material = Enum.Material.ForceField
+        hitboxSphere.BrickColor = BrickColor.new("Bright blue")
+        hitboxSphere.Transparency = 0.7
+        hitboxSphere.CanCollide = false
+        hitboxSphere.Anchored = true
+        hitboxSphere.Parent = hitboxFolder
+        
+        -- Add glow effect
+        local pointLight = Instance.new("PointLight")
+        pointLight.Color = Color3.fromRGB(100, 200, 255)
+        pointLight.Brightness = 2
+        pointLight.Range = radius
+        pointLight.Parent = hitboxSphere
+        
+        showNotification(string.format("Hiển thị hitbox bán kính: %d", radius), Color3.fromRGB(156, 39, 176))
+        
+        -- Auto remove after 10 seconds
+        game:GetService("Debris"):AddItem(hitboxSphere, 10)
+    end
+end
+
+local function scanRadius()
+    if isScanning then return end
+    isScanning = true
+    
+    ScanButton.Text = "🔄 Đang quét..."
+    ScanButton.BackgroundColor3 = Color3.fromRGB(108, 117, 125)
+    
+    -- Animate scan button
+    local scanTween = TweenService:Create(
+        ScanButton,
+        TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+        {TextSize = 14}
+    )
+    scanTween:Play()
+    
+    -- Clear previous scan results
+    for _, child in pairs(ScrollFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+    
+    -- Clear highlights
+    for _, highlight in pairs(highlightFolder:GetChildren()) do
+        highlight:Destroy()
+    end
+    
+    scanResults = {}
+    
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local playerPos = LocalPlayer.Character.HumanoidRootPart.Position
+        local radius = tonumber(RadiusInput.Text) or 50
+        
+        showNotification(string.format("Bắt đầu quét bán kính %d...", radius), Color3.fromRGB(255, 193, 7))
+        
+        -- Enhanced scan function với thông tin chi tiết
+        local function scanObject(obj, category)
+            if obj == LocalPlayer.Character then return end
+            
+            local position = nil
+            local size = Vector3.new(0, 0, 0)
+            local material = "Unknown"
+            local health = "N/A"
+            
+            if obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") then
+                position = obj.HumanoidRootPart.Position
+                size = obj.HumanoidRootPart.Size
+                material = obj.HumanoidRootPart.Material.Name
+                
+                -- Check if it's a player
+                if obj:FindFirstChild("Humanoid") then
+                    health = obj.Humanoid.Health .. "/" .. obj.Humanoid.MaxHealth
+                end
+            elseif obj:IsA("Part") then
+                position = obj.Position
+                size = obj.Size
+                material = obj.Material.Name
+            elseif obj:IsA("Model") and obj.PrimaryPart then
+                position = obj.PrimaryPart.Position
+                size = obj.PrimaryPart.Size
+                material = obj.PrimaryPart.Material.Name
+            end
+            
+            if position and (position - playerPos).Magnitude <= radius then
+                local result = {
+                    name = obj.Name,
+                    type = category,
+                    position = position,
+                    distance = (position - playerPos).Magnitude,
+                    size = size,
+                    material = material,
+                    health = health,
+                    object = obj
+                }
+                table.insert(scanResults, result)
+                
+                -- Add enhanced highlight với màu sắc phân loại
+                if obj:IsA("Model") or obj:IsA("Part") then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Name = obj.Name .. "_Highlight"
+                    
+                    -- Color coding based on category
+                    if category == "Người chơi" then
+                        highlight.FillColor = Color3.fromRGB(255, 100, 100)
+                    elseif category == "Mô hình" then
+                        highlight.FillColor = Color3.fromRGB(100, 255, 100)
+                    else
+                        highlight.FillColor = Color3.fromRGB(100, 100, 255)
+                    end
+                    
+                    highlight.FillTransparency = 0.5
+                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    highlight.OutlineTransparency = 0
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    highlight.Adornee = obj
+                    highlight.Parent = highlightFolder
+                end
+            end
+        end
+        
+        -- Scan players
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                scanObject(player.Character, "Người chơi")
+            end
+        end
+        
+        -- Scan workspace objects với độ sâu tối ưu
+        local function scanWorkspace(parent, depth)
+            if depth > 4 then return end
+            
+            for _, child in pairs(parent:GetChildren()) do
+                if child:IsA("Model") and child.Name ~= "Terrain" and not child:FindFirstChild("Humanoid") then
+                    scanObject(child, "Mô hình")
+                elseif child:IsA("Part") and child.CanCollide and child.Name ~= "Baseplate" then
+                    scanObject(child, "Vật thể")
+                end
+                
+                if child:IsA("Folder") or (child:IsA("Model") and #child:GetChildren() > 0) then
+                    scanWorkspace(child, depth + 1)
+                end
+            end
+        end
+        
+        scanWorkspace(Workspace, 0)
+        
+        -- Sort results by distance
+        table.sort(scanResults, function(a, b)
+            return a.distance < b.distance
+        end)
+        
+        -- Display enhanced results với thông tin chi tiết
+        local yOffset = 0
+        for i, result in ipairs(scanResults) do
+            local resultFrame = Instance.new("Frame")
+            resultFrame.Name = "Result" .. i
+            resultFrame.Size = UDim2.new(1, -10, 0, 100)
+            resultFrame.Position = UDim2.new(0, 5, 0, yOffset)
+            resultFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+            resultFrame.BorderSizePixel = 0
+            resultFrame.Parent = ScrollFrame
+            
+            local resultCorner = Instance.new("UICorner")
+            resultCorner.CornerRadius = UDim.new(0, 6)
+            resultCorner.Parent = resultFrame
+            
+            local resultGradient = Instance.new("UIGradient")
+            resultGradient.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 65)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 35, 55))
+            }
+            resultGradient.Rotation = 45
+            resultGradient.Parent = resultFrame
+            
+            -- Object icon based on type
+            local objectIcon = Instance.new("TextLabel")
+            objectIcon.Name = "ObjectIcon"
+            objectIcon.Size = UDim2.new(0, 30, 0, 30)
+            objectIcon.Position = UDim2.new(0, 5, 0, 5)
+            objectIcon.BackgroundTransparency = 1
+            objectIcon.TextSize = 20
+            objectIcon.Font = Enum.Font.Gotham
+            objectIcon.Parent = resultFrame
+            
+            if result.type == "Người chơi" then
+                objectIcon.Text = "👤"
+            elseif result.type == "Mô hình" then
+                objectIcon.Text = "🏗️"
+            else
+                objectIcon.Text = "📦"
+            end
+            
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Name = "NameLabel"
+            nameLabel.Size = UDim2.new(1, -45, 0, 20)
+            nameLabel.Position = UDim2.new(0, 40, 0, 5)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = result.name .. " (" .. result.type .. ")"
+            nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            nameLabel.TextSize = 12
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.Parent = resultFrame
+            
+            local posLabel = Instance.new("TextLabel")
+            posLabel.Name = "PosLabel"
+            posLabel.Size = UDim2.new(1, -45, 0, 15)
+            posLabel.Position = UDim2.new(0, 40, 0, 25)
+            posLabel.BackgroundTransparency = 1
+            posLabel.Text = string.format("📍 Vị trí: %.1f, %.1f, %.1f", result.position.X, result.position.Y, result.position.Z)
+            posLabel.TextColor3 = Color3.fromRGB(0, 255, 128)
+            posLabel.TextSize = 10
+            posLabel.Font = Enum.Font.Gotham
+            posLabel.TextXAlignment = Enum.TextXAlignment.Left
+            posLabel.Parent = resultFrame
+            
+            local distLabel = Instance.new("TextLabel")
+            distLabel.Name = "DistLabel"
+            distLabel.Size = UDim2.new(0.5, -5, 0, 15)
+            distLabel.Position = UDim2.new(0, 40, 0, 40)
+            distLabel.BackgroundTransparency = 1
+            distLabel.Text = string.format("📏 Khoảng cách: %.1f", result.distance)
+            distLabel.TextColor3 = Color3.fromRGB(255, 193, 7)
+            distLabel.TextSize = 10
+            distLabel.Font = Enum.Font.Gotham
+            distLabel.TextXAlignment = Enum.TextXAlignment.Left
+            distLabel.Parent = resultFrame
+            
+            local sizeLabel = Instance.new("TextLabel")
+            sizeLabel.Name = "SizeLabel"
+            sizeLabel.Size = UDim2.new(0.5, -5, 0, 15)
+            sizeLabel.Position = UDim2.new(0.5, 0, 0, 40)
+            sizeLabel.BackgroundTransparency = 1
+            sizeLabel.Text = string.format("📐 Kích thước: %.1f×%.1f×%.1f", result.size.X, result.size.Y, result.size.Z)
+            sizeLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+            sizeLabel.TextSize = 10
+            sizeLabel.Font = Enum.Font.Gotham
+            sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
+            sizeLabel.Parent = resultFrame
+            
+            local materialLabel = Instance.new("TextLabel")
+            materialLabel.Name = "MaterialLabel"
+            materialLabel.Size = UDim2.new(0.5, -5, 0, 15)
+            materialLabel.Position = UDim2.new(0, 40, 0, 55)
+            materialLabel.BackgroundTransparency = 1
+            materialLabel.Text = "🧱 Chất liệu: " .. result.material
+            materialLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
+            materialLabel.TextSize = 10
+            materialLabel.Font = Enum.Font.Gotham
+            materialLabel.TextXAlignment = Enum.TextXAlignment.Left
+            materialLabel.Parent = resultFrame
+            
+            if result.health ~= "N/A" then
+                local healthLabel = Instance.new("TextLabel")
+                healthLabel.Name = "HealthLabel"
+                healthLabel.Size = UDim2.new(0.5, -5, 0, 15)
+                healthLabel.Position = UDim2.new(0.5, 0, 0, 55)
+                healthLabel.BackgroundTransparency = 1
+                healthLabel.Text = "❤️ Máu: " .. result.health
+                healthLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+                healthLabel.TextSize = 10
+                healthLabel.Font = Enum.Font.Gotham
+                healthLabel.TextXAlignment = Enum.TextXAlignment.Left
+                healthLabel.Parent = resultFrame
+            end
+            
+            -- Enhanced buttons
+            local teleButton = createEnhancedButton(
+                "TeleButton", 
+                "🚀 Dịch chuyển", 
+                UDim2.new(0, 5, 0, 75), 
+                UDim2.new(0.3, -5, 0, 20), 
+                Color3.fromRGB(40, 167, 69), 
+                resultFrame
+            )
+            
+            local flyToButton = createEnhancedButton(
+                "FlyToButton", 
+                "✈️ Bay đến", 
+                UDim2.new(0.35, 0, 0, 75), 
+                UDim2.new(0.3, -5, 0, 20), 
+                Color3.fromRGB(255, 193, 7), 
+                resultFrame
+            )
+            
+            local focusButton = createEnhancedButton(
+                "FocusButton", 
+                "🎯 Tập trung", 
+                UDim2.new(0.7, 0, 0, 75), 
+                UDim2.new(0.3, -5, 0, 20), 
+                Color3.fromRGB(156, 39, 176), 
+                resultFrame
+            )
+            
+            -- Button events
+            teleButton.MouseButton1Click:Connect(function()
+                teleportTo(result.position.X, result.position.Y + 5, result.position.Z)
+            end)
+            
+            flyToButton.MouseButton1Click:Connect(function()
+                flyToPosition(result.position.X, result.position.Y + 5, result.position.Z)
+            end)
+            
+            focusButton.MouseButton1Click:Connect(function()
+                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local camera = Workspace.CurrentCamera
+                    camera.CFrame = CFrame.lookAt(camera.CFrame.Position, result.position)
+                    showNotification("Đã tập trung vào: " .. result.name, Color3.fromRGB(156, 39, 176))
+                end
+            end)
+            
+            yOffset = yOffset + 110
+        end
+        
+        ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, yOffset)
+        ScanResultsGui.Enabled = true
+        
+        showNotification(string.format("Tìm thấy %d đối tượng trong bán kính %d", #scanResults, radius), Color3.fromRGB(40, 167, 69))
+    end
+    
+    wait(1)
+    scanTween:Cancel()
+    ScanButton.Text = "🔍 Quét khu vực"
+    ScanButton.BackgroundColor3 = Color3.fromRGB(255, 193, 7)
+    isScanning = false
+end
+
+-- Event Connections với hiệu ứng
+
+-- Position update loop
+local positionConnection = RunService.Heartbeat:Connect(updatePosition)
+
+-- Minimize button với animation
+local isMinimized = false
+MinimizeButton.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    
+    local targetSize = isMinimized and UDim2.new(0, 450, 0, 45) or UDim2.new(0, 450, 0, 600)
+    local targetText = isMinimized and "+" or "─"
+    
+    local minimizeTween = TweenService:Create(
+        MainFrame,
+        TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        {Size = targetSize}
+    )
+    
+    minimizeTween:Play()
+    ContentFrame.Visible = not isMinimized
+    MinimizeButton.Text = targetText
+    
+    -- Update blur effect
+    local blurTween = TweenService:Create(
+        BlurEffect,
+        TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Size = isMinimized and 0 or 10}
+    )
+    blurTween:Play()
+end)
+
+-- Close button với cleanup animation
+CloseButton.MouseButton1Click:Connect(function()
+    -- Fade out animation
+    local fadeOut = TweenService:Create(
+        ScreenGui,
+        TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        {BackgroundTransparency = 1}
+    )
+    
+    local scaleOut = TweenService:Create(
+        MainFrame,
+        TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+        {Size = UDim2.new(0, 0, 0, 0)}
+    )
+    
+    fadeOut:Play()
+    scaleOut:Play()
+    
+    -- Cleanup
+    if flyConnection then
+        flyConnection:Disconnect()
+    end
+    if mobileFlyConnection then
+        mobileFlyConnection:Disconnect()
+    end
+    if positionConnection then
+        positionConnection:Disconnect()
+    end
+    
+    -- Stop flying
+    if isFlying then
+        toggleFly()
+    end
+    if isMobileFlying then
+        toggleMobileFly()
+    end
+    
+    -- Clear effects
+    if BlurEffect then
+        BlurEffect:Destroy()
+    end
+    if highlightFolder then
+        highlightFolder:Destroy()
+    end
+    if hitboxFolder then
+        hitboxFolder:Destroy()
+    end
+    
+    -- Destroy GUIs after animation
+    scaleOut.Completed:Connect(function()
+        ScreenGui:Destroy()
+        ScanResultsGui:Destroy()
+        if VirtualJoystick then
+            VirtualJoystick:Destroy()
+        end
+        ShadowFrame:Destroy()
+        BorderFrame:Destroy()
+    end)
+end)
+
+-- Copy coordinates button
+CoordinatesCopyButton.MouseButton1Click:Connect(function()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local pos = LocalPlayer.Character.HumanoidRootPart.Position
+        local coordText = string.format("%.1f, %.1f, %.1f", pos.X, pos.Y, pos.Z)
+        
+        -- Copy to clipboard (if supported)
+        if setclipboard then
+            setclipboard(coordText)
+            showNotification("Đã copy tọa độ: " .. coordText, Color3.fromRGB(100, 200, 255))
+        else
+            showNotification("Tọa độ: " .. coordText, Color3.fromRGB(100, 200, 255))
+        end
+    end
+end)
+
+-- Enhanced button events
+TeleportButton.MouseButton1Click:Connect(function()
+    local x = tonumber(XInput.Text)
+    local y = tonumber(YInput.Text)
+    local z = tonumber(ZInput.Text)
+    
+    if x and y and z then
+        teleportTo(x, y, z)
+    else
+        showNotification("Tọa độ không hợp lệ!", Color3.fromRGB(220, 53, 69))
+        
+        -- Flash red animation
+        local flashTween = TweenService:Create(
+            TeleportButton,
+            TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, true),
+            {BackgroundColor3 = Color3.fromRGB(220, 53, 69)}
+        )
+        flashTween:Play()
+    end
+end)
+
+FlyToButton.MouseButton1Click:Connect(function()
+    local x = tonumber(XInput.Text)
+    local y = tonumber(YInput.Text)
+    local z = tonumber(ZInput.Text)
+    
+    if x and y and z then
+        flyToPosition(x, y, z)
+    else
+        showNotification("Tọa độ không hợp lệ!", Color3.fromRGB(220, 53, 69))
+    end
+end)
+
+FlyButton.MouseButton1Click:Connect(toggleFly)
+
+-- Speed apply button
+SpeedApplyButton.MouseButton1Click:Connect(function()
+    local newSpeed = tonumber(SpeedInput.Text)
+    if newSpeed and newSpeed > 0 and newSpeed <= 1000 then
+        flySpeed = newSpeed
+        showNotification(string.format("Tốc độ bay đã được đặt: %d", flySpeed), Color3.fromRGB(100, 200, 255))
+    else
+        showNotification("Tốc độ không hợp lệ! (1-1000)", Color3.fromRGB(220, 53, 69))
+    end
+end)
+
+-- Mobile fly events
+if isMobile and MobileFlyFrame then
+    MobileFlyFrame:FindFirstChild("MobileFlyButton").MouseButton1Click:Connect(toggleMobileFly)
+    
+    MobileFlyFrame:FindFirstChild("MobileUpButton").MouseButton1Down:Connect(function()
+        if isMobileFlying and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local bodyVel = LocalPlayer.Character.HumanoidRootPart:FindFirstChild("BodyVelocity")
+            if bodyVel then
+                bodyVel.Velocity = bodyVel.Velocity + Vector3.new(0, flySpeed, 0)
+            end
+        end
+    end)
+    
+    MobileFlyFrame:FindFirstChild("MobileDownButton").MouseButton1Down:Connect(function()
+        if isMobileFlying and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local bodyVel = LocalPlayer.Character.HumanoidRootPart:FindFirstChild("BodyVelocity")
+            if bodyVel then
+                bodyVel.Velocity = bodyVel.Velocity - Vector3.new(0, flySpeed, 0)
+            end
+        end
+    end)
+    
+    MobileFlyFrame:FindFirstChild("MobileStopButton").MouseButton1Click:Connect(function()
+        if isMobileFlying and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local bodyVel = LocalPlayer.Character.HumanoidRootPart:FindFirstChild("BodyVelocity")
+            if bodyVel then
+                bodyVel.Velocity = Vector3.new(0, 0, 0)
+            end
+        end
+    end)
+end
+
+-- Scan and hitbox buttons
+ScanButton.MouseButton1Click:Connect(scanRadius)
+ShowHitboxButton.MouseButton1Click:Connect(showHitboxes)
+
+-- Scan results close button
+ResultsCloseButton.MouseButton1Click:Connect(function()
+    local closeTween = TweenService:Create(
+        ResultsFrame,
+        TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+        {Size = UDim2.new(0, 0, 0, 0)}
+    )
+    closeTween:Play()
+    
+    closeTween.Completed:Connect(function()
+        ScanResultsGui.Enabled = false
+        ResultsFrame.Size = UDim2.new(0, 600, 0, 500)
+    end)
+    
+    -- Clear highlights
+    for _, highlight in pairs(highlightFolder:GetChildren()) do
+        highlight:Destroy()
+    end
+end)
+
+-- Enhanced keyboard shortcuts
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.F then
+        toggleFly()
+    elseif input.KeyCode == Enum.KeyCode.R then
+        scanRadius()
+    elseif input.KeyCode == Enum.KeyCode.T then
+        local x = tonumber(XInput.Text)
+        local y = tonumber(YInput.Text)  
+        local z = tonumber(ZInput.Text)
+        if x and y and z then
+            teleportTo(x, y, z)
+        end
+    elseif input.KeyCode == Enum.KeyCode.G then
+        local x = tonumber(XInput.Text)
+        local y = tonumber(YInput.Text)  
+        local z = tonumber(ZInput.Text)
+        if x and y and z then
+            flyToPosition(x, y, z)
+        end
+    elseif input.KeyCode == Enum.KeyCode.H then
+        showHitboxes()
+    elseif input.KeyCode == Enum.KeyCode.M and isMobile then
+        toggleMobileFly()
+    end
+end)
+
+-- Auto-clean disconnected highlights
+Players.PlayerRemoving:Connect(function(player)
+    local highlight = highlightFolder:FindFirstChild(player.Name .. "_Highlight")
+    if highlight then
+        highlight:Destroy()
+    end
+end)
+
+-- Character respawn handling với animation
+LocalPlayer.CharacterAdded:Connect(function(character)
+    -- Stop flying when respawning
+    if isFlying then
+        isFlying = false
+        FlyButton.Text = "🕊️ Bật Bay"
+        FlyButton.BackgroundColor3 = Color3.fromRGB(23, 162, 184)
+        if flyConnection then
+            flyConnection:Disconnect()
+            flyConnection = nil
+        end
+    end
+    
+    if isMobileFlying then
+        isMobileFlying = false
+        if MobileFlyFrame then
+            MobileFlyFrame:FindFirstChild("MobileFlyButton").Text = "📱 Bay Mobile"
+            MobileFlyFrame:FindFirstChild("MobileFlyButton").BackgroundColor3 = Color3.fromRGB(255, 87, 34)
+        end
+        VirtualJoystick.Enabled = false
+        if mobileFlyConnection then
+            mobileFlyConnection:Disconnect()
+            mobileFlyConnection = nil
+        end
+    end
+    
+    showNotification("Nhân vật đã hồi sinh!", Color3.fromRGB(100, 200, 255))
+end)
+
+-- Virtual Joystick handling for mobile
+if isMobile and VirtualJoystick then
+    local joystickFrame = VirtualJoystick:FindFirstChild("JoystickFrame")
+    local knob = joystickFrame:FindFirstChild("JoystickKnob")
+    local isDragging = false
+    local centerPosition = UDim2.new(0.5, -20, 0.5, -20)
+    
+    knob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = true
+        end
+    end)
+    
+    knob.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = false
+            -- Return knob to center
+            local returnTween = TweenService:Create(
+                knob,
+                TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                {Position = centerPosition}
+            )
+            returnTween:Play()
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if isDragging and input.UserInputType == Enum.UserInputType.Touch then
+            local frameCenter = joystickFrame.AbsolutePosition + joystickFrame.AbsoluteSize / 2
+            local touchPos = input.Position
+            local delta = touchPos - frameCenter
+            local distance = math.min(delta.Magnitude, 40) -- Max distance from center
+            
+            if delta.Magnitude > 0 then
+                local direction = delta.Unit
+                local newPos = frameCenter + direction * distance
+                
+                -- Convert to UDim2
+                local relativePos = newPos - joystickFrame.AbsolutePosition
+                knob.Position = UDim2.new(0, relativePos.X - 20, 0, relativePos.Y - 20)
+            end
+        end
+    end)
+end
+
+-- Startup animation
+local startupTween = TweenService:Create(
+    MainFrame,
+    TweenInfo.new(0.8, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    {Size = UDim2.new(0, 450, 0, 600)}
+)
+
+local blurTween = TweenService:Create(
+    BlurEffect,
+    TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    {Size = 10}
+)
+
+-- Start with small size for animation
+MainFrame.Size = UDim2.new(0, 0, 0, 0)
+startupTween:Play()
+blurTween:Play()
+
+-- Welcome notification
+wait(1)
+showNotification("🚀 Advanced Executor v2.0 Pro đã sẵn sàng!", Color3.fromRGB(100, 200, 255))
+wait(2)
+showNotification("Phím tắt: F-Bay, R-Quét, T-Dịch chuyển, G-Bay đến, H-Hitbox" .. (isMobile and ", M-Bay Mobile" or ""), Color3.fromRGB(255, 193, 7))
+
+print("=== Advanced Executor GUI v2.0 Pro Loaded Successfully! ===")
+print("🚀 Enhanced Features:")
+print("   • Beautiful UI with animations and effects")
+print("   • Speed control via textbox input")
+print("   • Fly-to functionality with smooth movement")
+print("   • Mobile-specific fly controls with virtual joystick")
+print("   • Enhanced object scanning with detailed information")
+print("   • Hitbox visualization for scan radius")
+print("   • Improved notifications and visual feedback")
+print("   • Advanced keyboard shortcuts")
+print("")
+print("⌨️  Keyboard Shortcuts:")
+print("   F - Toggle Fly")
+print("   R - Scan Area") 
+print("   T - Teleport")
+print("   G - Fly To Position")
+print("   H - Show Hitboxes")
+if isMobile then
+    print("   M - Toggle Mobile Fly")
+end
+print("")
+print("📱 Mobile Features:")
+if isMobile then
+    print("   • Virtual joystick for mobile fly control")
+    print("   • Touch-optimized interface")
+    print("   • Mobile-specific fly mode")
+else
+    print("   • Desktop mode detected")
+end
+print("")
+print("🎨 Created by Assistant - Advanced Roblox Executor v2.0 Pro")
+print("   Enhanced with beautiful effects, mobile support, and advanced features!")
+print("===============================================================")
